@@ -1,2 +1,5 @@
-logs/*.*
+logs/*
+logs2/*
 .DS_Store
+
+*.pyc

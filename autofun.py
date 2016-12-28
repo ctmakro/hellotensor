@@ -84,7 +84,9 @@ Y_test = X_test
 import time
 
 losshist = {'l':[],'vl':[]}
+
 Cb=keras.callbacks.Callback
+
 update_timer = time.time()
 class Mycb(Cb):
     def __init__(self):

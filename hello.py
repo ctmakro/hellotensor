@@ -24,10 +24,12 @@ from __future__ import print_function
 import numpy as np
 
 import keras
+import tensorflow as tf
 from keras import backend as K
 from keras.datasets import cifar10
 from keras.preprocessing.image import ImageDataGenerator,load_img,img_to_array
 from keras.models import Sequential
+from keras.models import load_model
 from keras.layers import Dense, Dropout, Activation, Flatten
 from keras.layers import Convolution2D, MaxPooling2D
 from keras.optimizers import SGD
@@ -46,13 +48,13 @@ img_channels = 3
 
 
 from loaddata import load_data
-ximages,yvalues = load_data()
+ximages,yvalues = load_data(False)
 
 # now split
 # 5/6 train, 1/6 test
 
 total = ximages.shape[0]
-split = int(total/6*5)
+split = int(total*45/50)
 
 X_train = ximages[0:split]
 y_train = yvalues[0:split]
@@ -64,7 +66,6 @@ y_test = yvalues[split:total]
 #(X_train, y_train), (X_test, y_test) = cifar10.load_data()
 
 print('X_train shape:', X_train.shape)
-
 print('y_train shape:',y_train.shape)
 
 print(X_train.shape[0], 'train samples')
@@ -73,63 +74,78 @@ print(X_test.shape[0], 'test samples')
 #exit()
 
 # convert class vectors to binary class matrices
-Y_train = np_utils.to_categorical(y_train, nb_classes)
-Y_test = np_utils.to_categorical(y_test, nb_classes)
+# Y_train = np_utils.to_categorical(y_train, nb_classes)
+# Y_test = np_utils.to_categorical(y_test, nb_classes)
 
+Y_train = np.reshape(y_train,y_train.shape+(1,))
+Y_test = np.reshape(y_test,y_test.shape+(1,))
 # Y_train = y_train
 # Y_test = y_test
+print('Y_train after conversion:',Y_train.shape)
+
+
 
 model = Sequential()
 
-model.add(Convolution2D(32, 7, 7, #border_mode='same',
+model.add(Convolution2D(16, 7, 7, #border_mode='same',
                         input_shape=X_train.shape[1:]))
 model.add(Activation('relu'))
 
+model.add(MaxPooling2D(pool_size=(3, 3)))
+model.add(Dropout(0.5))
 
-model.add(MaxPooling2D(pool_size=(3,3)))
-model.add(Dropout(0.25))
-
-model.add(Convolution2D(32, 7, 7))
+model.add(Convolution2D(16, 7, 7))
 model.add(Activation('relu'))
 
-model.add(MaxPooling2D(pool_size=(3,3)))
-model.add(Dropout(0.25))
+model.add(MaxPooling2D(pool_size=(4, 4)))
+model.add(Dropout(0.5))
 
-model.add(Convolution2D(64, 3, 3))
-model.add(Activation('relu'))
+# this should cover 32x32 area
 
-model.add(MaxPooling2D(pool_size=(2,2)))
-model.add(Dropout(0.25))
-
-
-
-def moreconv():
-    global model
-    model.add(Convolution2D(64, 7, 7))
-    model.add(MaxPooling2D(pool_size=(3, 3)))
-    model.add(Activation('relu'))
-    model.add(Dropout(0.25))
-
-
-
-nb_classes = 2
-
-model.add(Flatten())
-#model.add(Dense(256))
+model.add(Convolution2D(8, 1, 1))
 model.add(Activation('relu'))
 model.add(Dropout(0.5))
 
-# why drop out..
+model.add(Convolution2D(1, 1, 1))
+model.add(Activation('relu'))
 
-# end
-model.add(Dense(nb_classes))
-model.add(Activation('softmax'))
+# model.add(Dropout(0.25))
+# generate 2 act. map
+nb_classes = 2
+
+# model.add(Activation('sigmoid'))
+# model.add(Activation('softmax'))
+
+#model.add(Dense(256))
+# model.add(Activation('relu'))
+# model.add(Dropout(0.5))
+#
+# # why drop out..
+#
+# # end
+# model.add(Dense(nb_classes))
+# model.add(Activation('softmax'))
+
+def my_fancy_loss(y_true, y_pred):
+    # ?, 3, 3, 1
+    # y_true should be between 0,1
+    # y_pred should be 0,+inf
+    yt = tf.reshape(y_true,[-1,9])
+    yp = K.softmax(tf.reshape(y_pred,[-1,9]))
+
+    return - K.mean(K.log(yp+1e-8)*yt,axis=-1)
+    #return K.mean(K.square(y_pred - y_true), axis=-1)
 
 # let's train the model using SGD + momentum (how original).
 sgd = SGD(lr=0.1, decay=1e-4, momentum=0.9, nesterov=True)
-model.compile(loss='categorical_crossentropy',
-              optimizer=sgd,
-              metrics=['accuracy'])
+model.compile(#loss='categorical_crossentropy',
+                loss=my_fancy_loss,
+                optimizer=sgd,
+                # metrics=['accuracy'],
+                # metrics=['']
+                )
+
+
 
 X_train = X_train.astype('float32')
 X_test = X_test.astype('float32')
@@ -138,10 +154,16 @@ X_train -= 0.5
 X_test /= 255
 X_test -= 0.5
 
-
+# load pretrained
+# model = load_model('evenbetter.h5')
 model.summary()
 
 #exit()
+
+def c1w_show():
+    import vis
+    c1w = model.layers[0].get_weights()[0]
+    vis.weightshow(c1w)
 
 def getimage(index):
     xi = ximages[index]
@@ -212,7 +234,8 @@ def gen_sgdr_callback(minlr=0.0001,maxlr=0.05,t0=5,tm=2): # https://arxiv.org/pd
     lr.lastepoch=0 # python does not have real closure. sucks!
     return keras.callbacks.LearningRateScheduler(lr)
 
-Cb=keras.callbacks.Callback
+import keras.callbacks as c
+Cb=c.Callback
 class Mycb(Cb):
     def __init__(self):
         super(Cb, self).__init__()
@@ -220,8 +243,16 @@ class Mycb(Cb):
         lr=K.get_value(self.model.optimizer.lr)
         logs['lr'] = lr
 
-#data_augmentation = False
-def r(ep=10,bs=100,maxlr=0.05):
+data_augmentation = False
+
+def gen_callback_stack(maxlr,t0=5):
+    return [
+        gen_sgdr_callback(maxlr=maxlr,t0=t0), # adjust lr
+        Mycb(), # export lr
+        c.TensorBoard(log_dir='./logs', histogram_freq=0, write_graph=False, write_images=True)
+    ]
+
+def r(ep=10,bs=100,maxlr=0.05,t0=5):
     batch_size=bs
     if not data_augmentation:
         print('Not using data augmentation.')
@@ -229,7 +260,9 @@ def r(ep=10,bs=100,maxlr=0.05):
                   batch_size=batch_size,
                   nb_epoch=ep,
                   validation_data=(X_test, Y_test),
-                  shuffle=True)
+                  shuffle=True,
+                  callbacks=gen_callback_stack(maxlr=maxlr)
+                  )
     else:
         print('Using real-time data augmentation.')
         # this will do preprocessing and realtime data augmentation
@@ -247,16 +280,11 @@ def r(ep=10,bs=100,maxlr=0.05):
         # compute quantities required for featurewise normalization
         # (std, mean, and principal components if ZCA whitening is applied)
         datagen.fit(X_train)
-        import keras.callbacks as c
         # fit the model on the batches generated by datagen.flow()
         model.fit_generator(datagen.flow(X_train, Y_train,
                             batch_size=batch_size),
                             samples_per_epoch=X_train.shape[0],
                             nb_epoch=ep,
                             validation_data=(X_test, Y_test),
-                            callbacks=[
-                                gen_sgdr_callback(maxlr=maxlr), # adjust lr
-                                Mycb(), # export lr
-                                c.TensorBoard(log_dir='./logs', histogram_freq=0, write_graph=False, write_images=False)
-                            ],
+                            callbacks=gen_callback_stack(maxlr=maxlr,t0=t0)
                             )

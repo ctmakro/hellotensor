@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import math
+import numpy as np
 
 def show(img):
     plt.imshow(img,cmap='gray')
@@ -23,4 +24,17 @@ def showmatrix(m,w,h):
                 break
             i.imshow(m[index],cmap='gray')
             index+=1
+    plt.show(block=False)
+
+def weightshow(m):
+    # m(w,h,d,count)
+
+    #show a matrice of images
+    count = m.shape[3]
+    plt.figure()
+    fig0, plots = plt.subplots(count,subplot_kw={'xticks': [], 'yticks': []})
+    fig0.subplots_adjust(hspace=0.1, wspace=0.01)
+    for i in range(count):
+        img = np.reshape(m[:,:,:,i],(m.shape[0],m.shape[1]))
+        plots[i].imshow(img,cmap='gray')
     plt.show(block=False)

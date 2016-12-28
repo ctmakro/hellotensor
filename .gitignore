@@ -3,3 +3,5 @@ logs2/*
 .DS_Store
 
 *.pyc
+arch.png
+*.npy

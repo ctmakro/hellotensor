@@ -11,6 +11,13 @@ import time
 
 Cb=keras.callbacks.Callback
 
+class EpochEndCallback(Cb):
+    def __init__(self,f):
+        super(Cb, self).__init__()
+        self.f = f
+    def on_epoch_end(self, epoch, logs={}):
+        self.f()
+
 class LoggerCallback(Cb):
     def __init__(self,keys=None,autoplot=True):
         super(Cb, self).__init__()

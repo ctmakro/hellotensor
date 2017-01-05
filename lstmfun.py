@@ -1,11 +1,3 @@
-'''Example script to generate text from Nietzsche's writings.
-At least 20 epochs are required before the generated text
-starts sounding coherent.
-It is recommended to run this script on GPU, as recurrent
-networks are quite computationally intensive.
-If you try this script on new data, make sure your corpus
-has at least ~100k characters. ~1M is better.
-'''
 
 from __future__ import print_function
 from keras.models import Sequential
@@ -14,61 +6,79 @@ from keras.layers import Dense, Activation, Dropout
 from keras.layers import LSTM
 from keras.optimizers import RMSprop,SGD
 from keras.utils.data_utils import get_file
+from keras import backend as K
 import numpy as np
 import random
 import sys
 
-path = get_file('nietzsche.txt', origin="https://s3.amazonaws.com/text-datasets/nietzsche.txt")
-text = open(path).read().lower()
-print('corpus length:', len(text))
-
-chars = sorted(list(set(text)))
-print('total chars:', len(chars))
-char_indices = dict((c, i) for i, c in enumerate(chars))
-indices_char = dict((i, c) for i, c in enumerate(chars))
-
-# cut the text in semi-redundant sequences of maxlen characters
-maxlen = 40
-step = 3
-sentences = []
-next_chars = []
-for i in range(0, len(text) - maxlen, step):
-    sentences.append(text[i: i + maxlen])
-    next_chars.append(text[i + maxlen])
-print('nb sequences:', len(sentences))
-
-print('Vectorization...')
-X = np.zeros((len(sentences), maxlen, len(chars)), dtype=np.bool)
-y = np.zeros((len(sentences), len(chars)), dtype=np.bool)
-for i, sentence in enumerate(sentences):
-    for t, char in enumerate(sentence):
-        X[i, t, char_indices[char]] = 1
-    y[i, char_indices[next_chars[i]]] = 1
-
 model = 0
 
-def buildmodel():
+def get_seq(count=4096,base=2,length=10):
+    print('generating sequences: {} examples, each sequence of length {}, with {}-based digits'.format(count,length,base))
 
+    seqin = np.random.choice(base,(count,length,2))
+    #(count,length_seq,2)
+    seqout = seqin[:,:,0].copy()
+    #(count,length_seq,1)
+
+    carry = 0
+    for i in range(length):
+        # calc intermediate result
+        imd = seqin[:,i,0] * seqin[:,i,1] + carry
+
+        carry = np.floor(imd/base)
+        seqout[:,i] = imd - carry * base
+
+    sample_last_seqout = seqout[:,-1].copy()
+
+    return seqin,sample_last_seqout
+
+sequence_length = 8
+number_base = 10
+seqin,seqout = get_seq(count=40960,base=number_base,length=sequence_length)
+
+# print(seqin,seqout)
+
+print('seqin and seqout shape:',seqin.shape,seqout.shape)
+
+print('now convert them to one hot..')
+def one_hot(tensor,classes):
+    heat = np.zeros(tensor.shape+(classes,))
+    for i in range(classes):
+        heat[...,i] = tensor[...] == i
+    return heat
+
+seqin = one_hot(tensor=seqin,classes=10)
+seqout = one_hot(tensor=seqout,classes=10)
+
+# print(seqin,seqout)
+print('seqin, seqout:',seqin.shape,seqout.shape)
+
+print('now reshaping seqin...')
+def reshape_seqin(seqin):
+    mod_seqin = np.reshape(seqin,seqin.shape[0:2]+((seqin.shape[2]*seqin.shape[3]),))
+    return mod_seqin
+
+mod_seqin = reshape_seqin(seqin)
+
+print('seqin, reshaped_seqin, seqout:',seqin.shape,mod_seqin.shape,seqout.shape)
+print(seqin[0],seqout[0])
+
+def buildmodel():
     # build the model: a single LSTM
     print('Build model...')
     model = Sequential()
-    model.add(LSTM(192, input_shape=(maxlen, len(chars))))
-    # model.add(Activation('relu'))
-    # model.add(Dropout(0.5))
+    model.add(LSTM(20, input_dim=number_base*2))
 
-    # model.add(Dense(32))
-    model.add(Activation('relu'))
-    #
-    # model.add(Dropout(0.5))
-
-    model.add(Dense(len(chars)))
+    # model.add(Activation('softplus'))
+    model.add(Dense(number_base))
     model.add(Activation('softmax'))
 
     model.summary()
 
-    optimizer = RMSprop(lr=0.005)
-    # optimizer= SGD(lr=0.05, decay=1e-4, momentum=0.9, nesterov=True)
-    model.compile(loss='categorical_crossentropy', optimizer=optimizer)
+    return model
+
+model = buildmodel()
 
 def loadmodel():
     print('loading model from file')
@@ -86,8 +96,17 @@ def sample(preds, temperature=1.0):
     probas = np.random.multinomial(1, preds, 1)
     return np.argmax(probas)
 
+def r(ep=1,opt=None,lr=0.05):
+    if opt is None:
+        opt = SGD(lr=lr, decay=1e-4, momentum=0.9, nesterov=True)
+    model.compile(loss='categorical_crossentropy',metrics=['accuracy'], optimizer=opt)
+    model.fit(mod_seqin,seqout,batch_size=256,nb_epoch=ep)
+
+def test(i):
+    print(model.predict(mod_seqin[i:i+1]),seqout[i])
+
 # train the model, output generated text after each iteration
-def r(epochs=1):
+def re(epochs=1):
     for iteration in range(1, epochs+1):
         print()
         print('-' * 50)
@@ -122,7 +141,7 @@ def r(epochs=1):
                 sys.stdout.flush()
             print()
 
-loadmodel()
+# loadmodel()
 def generate(prefix='',length=100,diversity=1.0):
     print()
     print('----- diversity:', diversity)

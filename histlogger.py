@@ -34,9 +34,14 @@ class LoggerCallback(Cb):
         self.autoplot = autoplot
         self.start_time=time.time()
         self.update_timer = time.time()
-        self.initplot()
+        self.plot_inited = False
 
     def on_epoch_end(self, epoch, logs={}):
+        if self.plot_inited==False:
+            self.initplot()
+            self.plot_inited=True
+
+
         lr=K.get_value(self.model.optimizer.lr)
         logs['lr'] = lr
 
@@ -47,16 +52,21 @@ class LoggerCallback(Cb):
             for s in losshist:
                 for k in s:
                     lk = logs[k]
-                    s[k].append(lk)
+                    s[k].append(max(lk,1e-10))
+                    if len(s[k])>1000:
+                        s[k].pop(0)
 
             self.timestamps.append(t)
+            if len(self.timestamps)>1000:
+                self.timestamps.pop(0)
 
             if time.time() > self.update_timer + 3:
                 self.update_timer = time.time()
                 self.updateplot()
 
     def on_batch_end(self, batch, logs={}):
-        plt.pause(0.001)
+        pass
+        # plt.pause(0.001)
 
     def initplot(self):
         plt.ion()

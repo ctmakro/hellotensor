@@ -55,7 +55,7 @@ def relu(x):
 # per freshest resnet paper
 def neck(nip,nop,stride):
     def unit(x):
-        nBottleneckPlane = nop / 4
+        nBottleneckPlane = int(nop / 4)
         nbp = nBottleneckPlane
 
         if nip==nop:
@@ -109,7 +109,6 @@ i = inp
 i = Convolution2D(16,3,3,border_mode='same')(i)
 
 i = cake(16,32,3,1)(i)
-# i = cake(32,64,3,2)(i)
 i = cake(32,64,3,2)(i)
 i = cake(64,128,3,2)(i)
 

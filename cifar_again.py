@@ -106,15 +106,15 @@ def cake(nip,nop,layers,std):
 inp = Input(shape=(32,32,3))
 i = inp
 
-i = Convolution2D(32,3,3,border_mode='same')(i)
+i = Convolution2D(16,3,3,border_mode='same')(i)
 
-i = cake(32,32,3,1)(i)
-i = cake(32,48,3,2)(i)
-i = cake(48,64,3,2)(i)
+i = cake(16,32,3,1)(i)
+# i = cake(32,64,3,2)(i)
+i = cake(32,64,3,2)(i)
 i = cake(64,128,3,2)(i)
 
 i = relu(i)
-# i = AveragePooling2D(pool_size=(2,2),border_mode='valid')(i)
+i = AveragePooling2D(pool_size=(8,8),border_mode='valid')(i)
 i = Flatten()(i)
 
 i = Dense(10)(i)

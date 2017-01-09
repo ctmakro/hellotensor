@@ -11,10 +11,9 @@ save it in a different format, load it in Python 3 and repickle it.
 from __future__ import print_function
 from keras.datasets import cifar10
 from keras.preprocessing.image import ImageDataGenerator
-from keras.models import Sequential
-from keras.layers import Dense, Dropout, Activation, Flatten
-from keras.layers import Convolution2D, MaxPooling2D,AtrousConvolution2D
-from keras.optimizers import SGD,Adam,Adadelta,Nadam
+from keras.models import *
+from keras.layers import *
+from keras.optimizers import *
 from keras.utils import np_utils
 import keras
 import math
@@ -51,45 +50,116 @@ Y_test = np_utils.to_categorical(y_test, nb_classes)
 
 model = Sequential()
 
-model.add(Convolution2D(16, 3, 3,input_shape=(32,32,3))) #norma conv
-model.add(Activation('relu'))
-model.add(Convolution2D(32, 3, 3))
-# model.add(Convolution2D(64, 3, 3, border_mode='same',
-#                         input_shape=X_train.shape[1:]))
-model.add(Activation('relu'))
+def relu(x):
+    return Activation('relu')(x)
+# per freshest resnet paper
+def neck(nip,nop,stride):
+    def unit(x):
+        nBottleneckPlane = nop / 4
+        nbp = nBottleneckPlane
 
-model.add(MaxPooling2D(pool_size=(2, 2)))
-model.add(Dropout(0.25))
+        if nip==nop:
+            ident = x
 
-model.add(Convolution2D(32, 3, 3)) #norma conv
-model.add(Activation('relu'))
+            x = relu(x)
+            x = Convolution2D(nbp,1,1,
+            subsample=(stride,stride))(x)
 
-model.add(Convolution2D(64, 3, 3))
-model.add(Activation('relu'))
+            x = relu(x)
+            x = Convolution2D(nbp,3,3,border_mode='same')(x)
 
-model.add(MaxPooling2D(pool_size=(2, 2)))
-model.add(Dropout(0.25))
+            x = relu(x)
+            x = Convolution2D(nop,1,1)(x)
 
-model.add(Convolution2D(128, 3, 3)) #norma conv
-model.add(Activation('relu'))
+            out = merge([ident,x],mode='sum')
+        else:
+            x = relu(x)
+            ident = x
 
+            x = Convolution2D(nbp,1,1,
+            subsample=(stride,stride))(x)
+
+            x = relu(x)
+            x = Convolution2D(nbp,3,3,border_mode='same')(x)
+
+            x = relu(x)
+            x = Convolution2D(nop,1,1)(x)
+
+            ident = Convolution2D(nop,1,1,
+            subsample=(stride,stride))(ident)
+
+            out = merge([ident,x],mode='sum')
+
+        return out
+    return unit
+
+def cake(nip,nop,layers,std):
+    def unit(x):
+        for i in range(layers):
+            if i==0:
+                x = neck(nip,nop,std)(x)
+            else:
+                x = neck(nop,nop,1)(x)
+        return x
+    return unit
+
+inp = Input(shape=(32,32,3))
+i = inp
+
+i = Convolution2D(32,3,3,border_mode='same')(i)
+
+i = cake(32,32,3,1)(i)
+i = cake(32,48,3,2)(i)
+i = cake(48,64,3,2)(i)
+i = cake(64,128,3,2)(i)
+
+i = relu(i)
+# i = AveragePooling2D(pool_size=(2,2),border_mode='valid')(i)
+i = Flatten()(i)
+
+i = Dense(10)(i)
+i = Activation('softmax')(i)
+
+model = Model(input=inp,output=i)
+# model.add(Convolution2D(16, 3, 3,input_shape=(32,32,3))) #norma conv
+# model.add(Activation('relu'))
+# model.add(Convolution2D(32, 3, 3))
+# # model.add(Convolution2D(64, 3, 3, border_mode='same',
+# #                         input_shape=X_train.shape[1:]))
+# model.add(Activation('relu'))
+#
+# model.add(MaxPooling2D(pool_size=(2, 2)))
+# model.add(Dropout(0.25))
+#
+# model.add(Convolution2D(32, 3, 3)) #norma conv
+# model.add(Activation('relu'))
+#
+# model.add(Convolution2D(64, 3, 3))
+# model.add(Activation('relu'))
+#
+# model.add(MaxPooling2D(pool_size=(2, 2)))
+# model.add(Dropout(0.25))
+#
 # model.add(Convolution2D(128, 3, 3)) #norma conv
 # model.add(Activation('relu'))
-
-model.add(MaxPooling2D(pool_size=(3, 3)))
-
-# model.add(AtrousConvolution2D(128, 3, 3, atrous_rate=(4,4)))
-# model.add(Activation('relu'))
-
-# model.add(Convolution2D(24, 1, 1)) #norma conv
-# model.add(Activation('relu'))
-
-model.add(Dropout(0.25))
-model.add(Convolution2D(10, 1, 1)) #norma conv
-# model.add(Activation('relu'))
-
-model.add(Flatten())
-model.add(Activation('softmax'))
+#
+# # model.add(Convolution2D(128, 3, 3)) #norma conv
+# # model.add(Activation('relu'))
+#
+# model.add(MaxPooling2D(pool_size=(3, 3)))
+#
+# # model.add(AtrousConvolution2D(128, 3, 3, atrous_rate=(4,4)))
+# # model.add(Activation('relu'))
+#
+# # model.add(Convolution2D(24, 1, 1)) #norma conv
+# # model.add(Activation('relu'))
+#
+# model.add(Dropout(0.25))
+# model.add(Convolution2D(10, 1, 1)) #norma conv
+# # model.add(Activation('relu'))
+#
+# model.add(Flatten())
+# model.add(Activation('softmax'))
 
 model.summary()
 
@@ -106,12 +176,12 @@ import histlogger as hl
 LoggerCallback = hl.LoggerCallback()
 
 #data_augmentation = False
-def r(ep=10,bs=100,maxlr=0.05):
+def r(ep=10,bs=100,maxlr=0.05,opt='adam'):
     # let's train the model using SGD + momentum (how original).
     sgd = SGD(lr=maxlr, decay=1e-6, momentum=0.95, nesterov=True)
     # opt = sgd
     # opt = Adam()
-    opt = 'rmsprop'
+    # opt = 'rmsprop'
     model.compile(loss='categorical_crossentropy',
                   optimizer=opt,
                   metrics=['accuracy'])

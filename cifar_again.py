@@ -49,59 +49,7 @@ Y_train = np_utils.to_categorical(y_train, nb_classes)
 Y_test = np_utils.to_categorical(y_test, nb_classes)
 
 model = Sequential()
-
-def relu(x):
-    return Activation('relu')(x)
-# per freshest resnet paper
-def neck(nip,nop,stride):
-    def unit(x):
-        nBottleneckPlane = int(nop / 4)
-        nbp = nBottleneckPlane
-
-        if nip==nop:
-            ident = x
-
-            x = relu(x)
-            x = Convolution2D(nbp,1,1,
-            subsample=(stride,stride))(x)
-
-            x = relu(x)
-            x = Convolution2D(nbp,3,3,border_mode='same')(x)
-
-            x = relu(x)
-            x = Convolution2D(nop,1,1)(x)
-
-            out = merge([ident,x],mode='sum')
-        else:
-            x = relu(x)
-            ident = x
-
-            x = Convolution2D(nbp,1,1,
-            subsample=(stride,stride))(x)
-
-            x = relu(x)
-            x = Convolution2D(nbp,3,3,border_mode='same')(x)
-
-            x = relu(x)
-            x = Convolution2D(nop,1,1)(x)
-
-            ident = Convolution2D(nop,1,1,
-            subsample=(stride,stride))(ident)
-
-            out = merge([ident,x],mode='sum')
-
-        return out
-    return unit
-
-def cake(nip,nop,layers,std):
-    def unit(x):
-        for i in range(layers):
-            if i==0:
-                x = neck(nip,nop,std)(x)
-            else:
-                x = neck(nop,nop,1)(x)
-        return x
-    return unit
+from keras_resnet import relu,neck,cake
 
 inp = Input(shape=(32,32,3))
 i = inp

@@ -339,7 +339,7 @@ def flatten_multiple_image_into_image(arr):
 
     return img,imgscale
 
-def show():
+def show(save=False):
     i = np.random.normal(loc=0.,scale=1.,size=(batch_size,zed))
     gened = gm.predict([i])
 
@@ -349,3 +349,6 @@ def show():
     im,ims = flatten_multiple_image_into_image(gened)
     cv2.imshow('gened scale:'+str(ims),im)
     cv2.waitKey(1)
+
+    if save!=False:
+        cv2.imwrite(save,im*255)

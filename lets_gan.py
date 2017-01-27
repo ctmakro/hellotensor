@@ -306,6 +306,21 @@ def r(ep=10,noise_level=1.):
 
         if i==ep-1 or i % 1==0: show()
 
+def autoscaler(img):
+    limit = 400.
+    # scales = [0.1,0.125,1./6.,0.2,0.25,1./3.,1./2.] + range(100)
+    scales = np.hstack([1./np.linspace(10,2,num=9), np.linspace(1,100,num=100)])
+
+    imgscale = limit/float(img.shape[0])
+    for s in scales:
+        if s>=imgscale:
+            imgscale=s
+            break
+
+    img = cv2.resize(img,dsize=(int(img.shape[1]*imgscale),int(img.shape[0]*imgscale)),interpolation=cv2.INTER_NEAREST)
+
+    return img,imgscale
+
 def flatten_multiple_image_into_image(arr):
     import cv2
     num,uh,uw,depth = arr.shape
@@ -325,17 +340,7 @@ def flatten_multiple_image_into_image(arr):
             img[row*uh+row:row*uh+uh+row,col*uw+col:col*uw+uw+col,:] = channels
             index+=1
 
-    limit = 400.
-    # scales = [0.1,0.125,1./6.,0.2,0.25,1./3.,1./2.] + range(100)
-    scales = np.hstack([1./np.linspace(10,2,num=9), np.linspace(1,100,num=100)])
-
-    imgscale = limit/float(img.shape[0])
-    for s in scales:
-        if s>=imgscale:
-            imgscale=s
-            break
-
-    img = cv2.resize(img,dsize=(int(img.shape[1]*imgscale),int(img.shape[0]*imgscale)),interpolation=cv2.INTER_NEAREST)
+    img,imgscale = autoscaler(img)
 
     return img,imgscale
 

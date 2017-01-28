@@ -8,7 +8,7 @@ def fib(x):
     return 1 if x<=2 else fib(x-1)+fib(x-2)
 
 import threadpool as tp
-pool = tp.ThreadPool(8)
+pool = tp.ThreadPool(4)
 
 # async map function with multithreading support.
 # returned mapresult is a map with integer indices.

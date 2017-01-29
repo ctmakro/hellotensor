@@ -8,9 +8,6 @@ import time
 
 visualization = False
 
-if visualization:
-    import vis
-
 import threading
 l = threading.Lock()
 
@@ -89,8 +86,8 @@ def all_subject():
     # read all subjects into list of 4d tensor
     directory = DICOM_DIR
     subdirs = os.listdir(directory)
-    subdirs = filter(lambda subdir:len(subdir)>10,subdirs)
-    # long folder names are hashes
+    subdirs = list(filter(lambda subdir:len(subdir)>10, subdirs))
+    # py3 filter() returns iterators
 
     def read_parallel(subdir):
         l.acquire()
@@ -136,7 +133,11 @@ def all_subject():
 #     return remap
 
 def disp(img):
-    vis.autoscaler_show(img)
+    if visualization:
+        import vis
+        vis.autoscaler_show(img)
+    else:
+        print('please set visualization to True')
 
 tensors, hashes = all_subject()
 
@@ -144,13 +145,11 @@ def loopall():
     for i in range(len(tensors)):
         for j in range(tensors[i].shape[0]):
             disp(tensors[i][j])
-        cv2.destroyAllWindows()
+            cv2.destroyAllWindows()
+
 
 def saveall():
-    f = open('dicom_tensors.npz','w')
+    f = open('dicom_tensors.npz','wb') # must open as binary
     np.savez(f,tensors=tensors,hashes=hashes)
     f.close()
     print('saved.')
-
-if visualization:
-    loopall()

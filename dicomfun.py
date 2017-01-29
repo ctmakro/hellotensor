@@ -5,7 +5,11 @@ import scipy.ndimage
 import cv2
 import os
 import time
-import vis
+
+visualization = False
+
+if visualization:
+    import vis
 
 import threading
 l = threading.Lock()
@@ -148,4 +152,5 @@ def saveall():
     f.close()
     print('saved.')
 
-loopall()
+if visualization:
+    loopall()

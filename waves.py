@@ -28,6 +28,7 @@ def waterfall(tensor1d):
     wfall = np.zeros((windows,window/2+1),dtype='float32')
 
     hanning_window = np.hanning(window)
+    # thx to https://kevinsprojects.wordpress.com/2014/12/13/short-time-fourier-transform-using-python-and-numpy/
 
     for i in range(windows):
         start = i * window / tiling

@@ -102,7 +102,13 @@ def all_subject():
             print('readed:',t4d.shape,'in {:6.2f} seconds'.format(tick))
             l.release()
 
-            return (t4d,subdir)
+            # don't return, but save directly(to save memory)
+
+            # return (t4d,subdir)
+
+            saveone(t4d,subdir)
+
+            return 1
 
     tick2 =time.time()
     if True:
@@ -115,13 +121,15 @@ def all_subject():
     print('took {:6.2f} seconds reading {} instances'
     .format(tick2,len(results)))
 
-    tensors=[]
-    hashes=[]
-    for k in results:
-        tensors.append(results[k][0])
-        hashes.append(results[k][1])
+    # cancel the following pass.
 
-    return tensors, hashes # 4d tensor list and hash list
+    # tensors=[]
+    # hashes=[]
+    # for k in results:
+    #     tensors.append(results[k][0])
+    #     hashes.append(results[k][1])
+    #
+    # return tensors, hashes # 4d tensor list and hash list
 
 # def normalize(t4d):
 #     raw = t4d
@@ -139,7 +147,7 @@ def disp(img):
     else:
         print('please set visualization to True')
 
-tensors, hashes = all_subject()
+# tensors, hashes = all_subject()
 
 def loopall():
     for i in range(len(tensors)):
@@ -153,3 +161,9 @@ def saveall():
     np.savez(f,tensors=tensors,hashes=hashes)
     f.close()
     print('saved.')
+
+def saveone(tensor,hashstr):
+    f = open('./converted/'+hashstr + '.npz','wb') # must open as binary
+    np.savez(f,tensors=tensor,hashes=hashstr)
+    f.close()
+    print(hashstr + ' saved.')

@@ -49,6 +49,7 @@ Y_train = np_utils.to_categorical(y_train, nb_classes)
 Y_test = np_utils.to_categorical(y_test, nb_classes)
 
 model = Sequential()
+<<<<<<< HEAD
 
 def relu(x):
     return Activation('relu')(x)
@@ -108,6 +109,9 @@ def cake(nip,nop,layers,std):
                 x = neck(nop,nop,1)(x)
         return x
     return unit
+=======
+from keras_resnet import relu,neck,cake
+>>>>>>> 310316b0ac17f8d527ccd82fcf4e1890cac6b698
 
 inp = Input(shape=(32,32,3))
 i = inp

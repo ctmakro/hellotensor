@@ -1,10 +1,8 @@
 
 from __future__ import print_function
-from keras.models import Sequential
-from keras.models import load_model
-from keras.layers import Dense, Activation, Dropout
-from keras.layers import LSTM
-from keras.optimizers import RMSprop,SGD
+from keras.models import *
+from keras.layers import *
+from keras.optimizers import *
 from keras.utils.data_utils import get_file
 from keras import backend as K
 import numpy as np
@@ -13,7 +11,7 @@ import sys
 
 model = 0
 
-def get_seq(count=4096,base=2,length=10):
+def get_seq(count=8192,base=2,length=10):
     print('generating sequences: {} examples, each sequence of length {}, with {}-based digits'.format(count,length,base))
 
     seqin = np.random.choice(base,(count,length,2))
@@ -33,9 +31,9 @@ def get_seq(count=4096,base=2,length=10):
 
     return seqin,sample_last_seqout
 
-sequence_length = 8
+sequence_length = 21
 number_base = 10
-seqin,seqout = get_seq(count=40960,base=number_base,length=sequence_length)
+seqin,seqout = get_seq(count=4096,base=number_base,length=sequence_length)
 
 # print(seqin,seqout)
 
@@ -67,12 +65,24 @@ print(seqin[0],seqout[0])
 def buildmodel():
     # build the model: a single LSTM
     print('Build model...')
-    model = Sequential()
-    model.add(LSTM(20, input_dim=number_base*2))
+    inp = Input(shape=(sequence_length,number_base*2,))
+    i = inp
+    i = LSTM(16)(i)
+    lstmout = i
 
-    # model.add(Activation('softplus'))
-    model.add(Dense(number_base))
-    model.add(Activation('softmax'))
+    i = Dense(32)(i)
+    i = Activation('relu')(i)
+    i = merge([i,lstmout],mode='concat')
+
+    i = Dense(32)(i)
+    i = Activation('relu')(i)
+    i = merge([i,lstmout],mode='concat')
+
+    i = Dense(number_base)(i)
+
+    i = Activation('softmax')(i)
+
+    model = Model(input=inp,output=i)
 
     model.summary()
 
@@ -96,15 +106,25 @@ def sample(preds, temperature=1.0):
     probas = np.random.multinomial(1, preds, 1)
     return np.argmax(probas)
 
+from histlogger import LoggerCallback
+
+lcb = LoggerCallback(keys=[
+{'loss':[]},
+{'acc':[]}
+]
+)
+
 def r(ep=1,opt=None,lr=0.05):
     if opt is None:
         opt = SGD(lr=lr, decay=1e-4, momentum=0.9, nesterov=True)
     model.compile(loss='categorical_crossentropy',metrics=['accuracy'], optimizer=opt)
-    model.fit(mod_seqin,seqout,batch_size=256,nb_epoch=ep)
+    model.fit(mod_seqin,seqout,batch_size=256,nb_epoch=ep,
+    callbacks=[lcb]
+    )
 
 def test(i):
     print(model.predict(mod_seqin[i:i+1]),seqout[i])
-
+#--------------------------------------------------------------------------------
 # train the model, output generated text after each iteration
 def re(epochs=1):
     for iteration in range(1, epochs+1):

@@ -19,7 +19,7 @@ class EpochEndCallback(Cb):
         self.f()
 
 class LoggerCallback(Cb):
-    def __init__(self,keys=None,autoplot=True):
+    def __init__(self,keys=None,autoplot=True,interval=3.):
         super(Cb, self).__init__()
 
         if keys is None:
@@ -34,6 +34,7 @@ class LoggerCallback(Cb):
         self.autoplot = autoplot
         self.start_time=time.time()
         self.update_timer = time.time()
+        self.update_interval=interval
         self.plot_inited = False
 
     def on_epoch_end(self, epoch, logs={}):
@@ -60,7 +61,7 @@ class LoggerCallback(Cb):
             if len(self.timestamps)>1000:
                 self.timestamps.pop(0)
 
-            if time.time() > self.update_timer + 3:
+            if time.time() > self.update_timer + self.update_interval:
                 self.update_timer = time.time()
                 self.updateplot()
 

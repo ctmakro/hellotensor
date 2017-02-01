@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import cv2
 import math
 import numpy as np
 
@@ -38,3 +39,24 @@ def weightshow(m):
         img = np.reshape(m[:,:,:,i],(m.shape[0],m.shape[1]))
         plots[i].imshow(img,cmap='gray')
     plt.show(block=False)
+
+
+def autoscaler(img,limit=400.):
+    # scales = [0.1,0.125,1./6.,0.2,0.25,1./3.,1./2.] + range(100)
+    scales = np.hstack([1./np.linspace(10,2,num=9), np.linspace(1,100,num=100)])
+
+    imgscale = limit/float(max(img.shape[0],img.shape[1]))
+    for s in reversed(scales):
+        if s<=imgscale:
+            imgscale=s
+            break
+
+    if imgscale!=1.:
+        img = cv2.resize(img,dsize=(int(img.shape[1]*imgscale),int(img.shape[0]*imgscale)),interpolation=cv2.INTER_NEAREST)
+
+    return img,imgscale
+
+def autoscaler_show(img,limit=800.):
+    im,ims = autoscaler(img,limit=limit)
+    cv2.imshow(str(img.shape)+' gened scale:'+str(ims),im)
+    cv2.waitKey(1)

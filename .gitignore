@@ -7,3 +7,7 @@ arch.png
 *.npy
 
 .ipynb_checkpoints/
+
+*.h5
+
+*.pyc

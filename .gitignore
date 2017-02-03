@@ -5,3 +5,5 @@ logs2/*
 *.pyc
 arch.png
 *.npy
+
+.ipynb_checkpoints/

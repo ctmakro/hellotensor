@@ -72,8 +72,8 @@ from keras.datasets import mnist
 
 X_train = X_train.astype('float32')
 X_test = X_test.astype('float32')
-X_train /= 255
-X_test /= 255
+X_train /= 255.
+X_test /= 255.
 
 # reshape into 2d
 X_train = X_train.reshape(X_train.shape[0],784)
@@ -123,6 +123,8 @@ def r(ep=100,bs=128):
         p2.ETA(),
         ' ',
         p2.DynamicMessage('loss'),
+        ' ',
+        p2.DynamicMessage('acc')
         ])
         # bar.update(0)
 
@@ -130,9 +132,13 @@ def r(ep=100,bs=128):
             # train one minibatch
             inputs = X_train[j:j+batch_size]
             labels = Y_train[j:j+batch_size]
-            train_step.run(feed_dict={x:inputs, gt:labels})
+            res = sess.run([accuracy,loss,train_step],feed_dict={x:inputs, gt:labels})
+            # train_step.run(feed_dict={x:inputs, gt:labels})
 
-            bar.update(min(j+batch_size,length),loss=.1)
+            bar.update(min(j+batch_size,length),
+            loss=res[1],
+            acc =res[0]
+            )
 
         print('')
 
@@ -143,5 +149,6 @@ def r(ep=100,bs=128):
         length,eptime,eptime/length,length/eptime,now))
 
         # test set
-        acc = accuracy.eval(feed_dict={x:X_test, gt:Y_test})
-        print('test acc:',acc)
+        res = sess.run([accuracy,loss],feed_dict={x:X_test, gt:Y_test})
+
+        print('test loss:{:6.4f} acc:{:6.4f}'.format(res[1],res[0]))

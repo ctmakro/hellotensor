@@ -1,10 +1,9 @@
 from __future__ import print_function
 
 from tensorflow_boilerplate import *
+# from tensorflow_session import get_session
 import tensorflow as tf
 import numpy as np
-
-sess = tf.InteractiveSession()
 
 def build_model():
     inp = tf.placeholder(tf.float32, shape=[None, 784])
@@ -33,11 +32,11 @@ def build_model():
 x,y = build_model()
 gt = tf.placeholder(tf.float32, shape=[None, 10])
 
-mr = ModelRunner(inputs=x,outputs=y,sess=sess)
-mr.set_loss_function(categorical_cross_entropy(gt),gt)
+mr = ModelRunner(inputs=x,outputs=y,gt=gt)
+mr.set_loss(categorical_cross_entropy(y,gt)) # loss(y,gt)
 mr.set_optimizer(Adam(1e-3))
-mr.set_acc(batch_accuracy)
-mr.online()
+mr.set_acc(batch_accuracy(y,gt)) # optional. acc(y,gt)
+mr.ready_to_train()
 
 def mnist_data():
     print('loading mnist...')
@@ -72,42 +71,31 @@ def mnist_data():
     print('Y_train shape:',Y_train.shape)
     print(Y_train[0])
 
+    print('mnist loaded.')
     return X_train,Y_train,X_test,Y_test
 
 xtrain,ytrain,xtest,ytest = mnist_data()
 
 summary()
 
-def r(ep=100,bs=128):
-    length = len(xtrain) # length of one epoch run
-    batch_size = bs
-    timer = TrainTimer()
+def get_graph_variables(op):
+    var_list = op.graph.get_collection('trainable_variables')
+    return var_list
 
-    for i in range(ep):
-        timer.epstart()
+def variables_summary(var_list):
+    shapes = [v.get_shape() for v in var_list]
+    shape_lists = [s.as_list() for s in shapes]
+    shape_lists = list(map(lambda x:''.join(map(lambda x:'{:>5}'.format(x),x)),shape_lists))
 
-        print('--------------')
-        print('Epoch',i)
+    num_elements = [s.num_elements() for s in shapes]
+    total_num_of_variables = sum(num_elements)
+    print('counting variables...')
+    for i in range(len(shapes)):
+        print('{:>25}  ->  {:<6}'.format(shape_lists[i],num_elements[i]))
 
-        bar = StatusBar(length)
+    print('{:>25}  ->  {:<6}'.format(
+    'tensors: '+str(len(shapes)),
+    str(total_num_of_variables)+' free variables'))
 
-        for j in range(0, length, batch_size):
-            # train one minibatch
-            inputs = xtrain[j:j+batch_size]
-            labels = ytrain[j:j+batch_size]
-
-            res = mr.onestep(inputs,labels,train=True)
-
-            bar.update(min(j+batch_size,length),
-            loss=res[0],
-            acc =res[1]
-            )
-
-        print('')
-        timer.epend_report(length)
-
-        # test set
-        timer.epstart()
-        res = mr.onestep(xtest,ytest,train=False)
-        duration = timer.epend()
-        print('test done in {:6.2f}s loss:{:6.4f} acc:{:6.4f}'.format(duration,res[0],res[1]))
+r = mr.defaultEpochRunner(xtrain,ytrain,xtest,ytest)
+# r = mr.defaultEpochRunner(xtrain,ytrain)

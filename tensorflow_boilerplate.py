@@ -77,6 +77,12 @@ def TrainWith(loss,optimizer):
     # descend all variables wrt their gradient to reduce loss
     return update
 
+def categorical_cross_entropy(gt):
+    def cel(y):
+        loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y, gt))
+        return loss
+    return cel
+
 class StatusBar(object):
     def __init__(self,length):
         import progressbar as p2
@@ -122,3 +128,64 @@ class TrainTimer(object):
         now = self.stamp()
         print('{} sample in {:6.2f}s, {:6.4f}/sample, {:6.2f}/s - {:6.2f}s total'.format(
         length,eptime,eptime/length,length/eptime,now))
+
+class ModelRunner:
+    def __init__(self,inputs,outputs,sess=None):
+        self.inputs = inputs
+        self.outputs = outputs
+
+        self.acc_function = None
+        self.sess = sess # default none
+
+    def set_optimizer(self,optimizer):
+        self.optimizer = optimizer
+
+    def set_loss_function(self,loss_function,gt=None):
+        self.loss_function = loss_function
+        self.gt = gt
+
+    def set_acc(self,acc_function):
+        self.acc_function = acc_function
+
+    def online(self):
+        self.calc_acc = False if self.acc_function is None else True
+        if self.calc_acc:
+            self.acc = self.acc_function(self.outputs,self.gt)
+
+        self.loss = self.loss_function(self.outputs)
+        self.train_step = TrainWith(self.loss,self.optimizer)
+
+        if self.sess is None:
+            self.sess = tf.InteractiveSession()
+
+        self.sess.run(tf.global_variables_initializer())
+
+    def onestep(self,inputs,gt=None,train=False):
+        train_step = self.train_step
+        loss = self.loss
+        acc = self.acc
+
+        want_to_execute = [loss]
+
+        if train == True:
+            want_to_execute = [train_step] + want_to_execute
+        if self.calc_acc:
+            want_to_execute += [acc]
+
+        feed_dict = {self.inputs:inputs}
+
+        if self.gt is not None and gt is not None:
+            # feed gt only if we need it.
+            feed_dict[self.gt] = gt
+
+        if self.gt is None != gt is None:
+            # if specified not provided, or provided not specified
+            raise NameError('something wrong with gt or self.gt, check your code.')
+
+        result = self.sess.run(want_to_execute,
+        feed_dict=feed_dict)
+
+        if train == True:
+            result = result[1:]
+
+        return result

@@ -31,17 +31,13 @@ def build_model():
     return inp,out
 
 x,y = build_model()
-
 gt = tf.placeholder(tf.float32, shape=[None, 10])
 
-loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(y, gt))
-# loss function: softmax + cross_entropy
-acc = batch_accuracy(y,gt)
-
-adam = Adam(1e-3)
-train_step = TrainWith(loss,adam)
-
-sess.run(tf.global_variables_initializer())
+mr = ModelRunner(inputs=x,outputs=y,sess=sess)
+mr.set_loss_function(categorical_cross_entropy(gt),gt)
+mr.set_optimizer(Adam(1e-3))
+mr.set_acc(batch_accuracy)
+mr.online()
 
 def mnist_data():
     print('loading mnist...')
@@ -83,10 +79,9 @@ xtrain,ytrain,xtest,ytest = mnist_data()
 summary()
 
 def r(ep=100,bs=128):
-    timer = TrainTimer()
-
     length = len(xtrain) # length of one epoch run
     batch_size = bs
+    timer = TrainTimer()
 
     for i in range(ep):
         timer.epstart()
@@ -100,12 +95,12 @@ def r(ep=100,bs=128):
             # train one minibatch
             inputs = xtrain[j:j+batch_size]
             labels = ytrain[j:j+batch_size]
-            res = sess.run([train_step,loss,acc],feed_dict={x:inputs, gt:labels})
-            # train_step.run(feed_dict={x:inputs, gt:labels})
+
+            res = mr.onestep(inputs,labels,train=True)
 
             bar.update(min(j+batch_size,length),
-            loss=res[1],
-            acc =res[2]
+            loss=res[0],
+            acc =res[1]
             )
 
         print('')
@@ -113,6 +108,6 @@ def r(ep=100,bs=128):
 
         # test set
         timer.epstart()
-        res = sess.run([loss,acc],feed_dict={x:xtest, gt:ytest})
+        res = mr.onestep(xtest,ytest,train=False)
         duration = timer.epend()
         print('test done in {:6.2f}s loss:{:6.4f} acc:{:6.4f}'.format(duration,res[0],res[1]))

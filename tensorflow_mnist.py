@@ -1,42 +1,55 @@
 from __future__ import print_function
 
 from tensorflow_boilerplate import *
-# from tensorflow_session import get_session
+from tensorflow_session import *
 import tensorflow as tf
 import numpy as np
 
 def build_model():
+    print('building model...')
+
     inp = tf.placeholder(tf.float32, shape=[None, 784])
 
     i = inp
     i = tf.reshape(i,[-1,28,28,1]) # reshape into 4d tensor
 
-    i = conv2d(1,8,3)(i)
+    i = conv2d(1,16,3)(i)
 
-    i = resconv(i,8,8)
-    i = resconv(i,8,16,std=2)
+    i = resconv(i,16,16)
+    i = resconv(i,16,16)
+    i = resconv(i,16,16,std=2)
 
+    i = resconv(i,16,16)
     i = resconv(i,16,16)
     i = resconv(i,16,32,std=2)
 
     i = resconv(i,32,32)
+    i = resconv(i,32,32)
     i = resconv(i,32,64,std=2)
 
-    i = resconv(i,64,10)
+    i = bn(i)
+    i = relu(i)
+    i = conv2d(64,10,1)(i)
+
+    # i = resconv(i,64,10)
 
     i = tf.reduce_mean(i,[1,2]) # 2d tensor (N, onehot)
 
     out = i
+    print('model built.')
     return inp,out
 
-x,y = build_model()
+with tf.variable_scope('dis'):
+    x,y = build_model()
+
 gt = tf.placeholder(tf.float32, shape=[None, 10])
 
 mr = ModelRunner(inputs=x,outputs=y,gt=gt)
 mr.set_loss(categorical_cross_entropy(y,gt)) # loss(y,gt)
-mr.set_optimizer(Adam(1e-3))
+mr.set_optimizer(Adam(1e-2))
 mr.set_acc(batch_accuracy(y,gt)) # optional. acc(y,gt)
-mr.ready_to_train()
+
+f = make_function(x,y)
 
 def mnist_data():
     print('loading mnist...')
@@ -76,26 +89,7 @@ def mnist_data():
 
 xtrain,ytrain,xtest,ytest = mnist_data()
 
-summary()
+summary('dis')
 
-def get_graph_variables(op):
-    var_list = op.graph.get_collection('trainable_variables')
-    return var_list
-
-def variables_summary(var_list):
-    shapes = [v.get_shape() for v in var_list]
-    shape_lists = [s.as_list() for s in shapes]
-    shape_lists = list(map(lambda x:''.join(map(lambda x:'{:>5}'.format(x),x)),shape_lists))
-
-    num_elements = [s.num_elements() for s in shapes]
-    total_num_of_variables = sum(num_elements)
-    print('counting variables...')
-    for i in range(len(shapes)):
-        print('{:>25}  ->  {:<6}'.format(shape_lists[i],num_elements[i]))
-
-    print('{:>25}  ->  {:<6}'.format(
-    'tensors: '+str(len(shapes)),
-    str(total_num_of_variables)+' free variables'))
-
-r = mr.defaultEpochRunner(xtrain,ytrain,xtest,ytest)
+r = mr.get_epoch_runner(xtrain,ytrain,xtest,ytest)
 # r = mr.defaultEpochRunner(xtrain,ytrain)

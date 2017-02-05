@@ -15,23 +15,21 @@ def build_model():
 
     i = conv2d(1,16,3)(i)
 
-    i = resconv(i,16,16)
+    # i = resconv(i,16,16)
     i = resconv(i,16,16)
     i = resconv(i,16,16,std=2)
 
-    i = resconv(i,16,16)
+    # i = resconv(i,16,16)
     i = resconv(i,16,16)
     i = resconv(i,16,32,std=2)
 
-    i = resconv(i,32,32)
+    # i = resconv(i,32,32)
     i = resconv(i,32,32)
     i = resconv(i,32,64,std=2)
 
     i = bn(i)
     i = relu(i)
     i = conv2d(64,10,1)(i)
-
-    # i = resconv(i,64,10)
 
     i = tf.reduce_mean(i,[1,2]) # 2d tensor (N, onehot)
 
@@ -46,7 +44,7 @@ gt = tf.placeholder(tf.float32, shape=[None, 10])
 
 mr = ModelRunner(inputs=x,outputs=y,gt=gt)
 mr.set_loss(categorical_cross_entropy(y,gt)) # loss(y,gt)
-mr.set_optimizer(Adam(1e-2))
+mr.set_optimizer(Adam(1e-3))
 mr.set_acc(batch_accuracy(y,gt)) # optional. acc(y,gt)
 
 f = make_function(x,y)

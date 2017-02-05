@@ -506,19 +506,21 @@ class AdvancedModelRunner:
         try:
             epoch_length = len(xtrain)
             steps = int(epoch_length * num_epochs / batch_size)
+            start_time = time.time()
             for i in range(steps):
-                start_time = time.time()
 
                 res = sess.run([train_op,loss])
                 res = res[1:]
                 loss_value = res[0]
 
-                duration = time.time() - start_time
-
                 if i%100==0:
+                    duration = time.time() - start_time
+
                     print('{} step {:6.2f} sec, {:6.2f}/sec, loss:{:6.4f}'.format(
-                    i,duration,100/duration,loss_value
+                    i,duration,100*batch_size/duration,loss_value
                     ))
+
+                    start_time += duration
 
         except tf.errors.OutOfRangeError:
             print('OORE excepted, done?')

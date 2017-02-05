@@ -2,6 +2,7 @@
 import tensorflow as tf
 from tensorflow_session import get_session
 import numpy as np
+import time
 
 def make_weight(shape):
     initial = tf.truncated_normal(shape, stddev=0.1)
@@ -163,7 +164,7 @@ def batch_accuracy(pred,gt):
     acc = tf.reduce_mean(tf.cast(correct_vector,tf.float32))
     return acc
 
-def summary(scope_name):
+def summary_scope(scope_name):
     var_list = get_variables_of_scope(
     tf.GraphKeys.TRAINABLE_VARIABLES,scope_name)
     print('collection: trainable_variables')
@@ -437,3 +438,95 @@ class ModelRunner:
 
             set_training_mode(False) # flag off
         return r
+
+class AdvancedModelRunner:
+    def check_things(self):
+        for i in ['optimizer','net']:
+            if not hasattr(self,i):
+                raise NameError('check_things() failed:',i)
+        print('things seem fine')
+
+    def data_preloader_gen(self,nparray):
+        # generate in-memory variables for datasets.
+        initializer = tf.placeholder(dtype=nparray.dtype,shape=nparray.shape)
+        var = tf.Variable(initializer,trainable=False,collections=[])
+        return var,initializer
+
+    def epoch_runner_preload(self,xtrain,ytrain=None,xtest=None,ytest=None):
+        self.check_things()
+
+        batch_size = 50
+        num_epochs = 2
+        # assume all of em are valid.
+        with tf.name_scope('input_feeder'):
+            xtrain_var,xtrain_init = self.data_preloader_gen(xtrain)
+            ytrain_var,ytrain_init = self.data_preloader_gen(ytrain)
+
+            # slice [N,X] into [X]
+            xtrain_piece, ytrain_piece = tf.train.slice_input_producer(
+            [xtrain_var, ytrain_var],
+            num_epochs=None, # dont raise that stupid OORE
+            capacity=batch_size*3
+            )
+            # generate feed by slicing training data variables.
+            # repeat for 1 epoch
+
+            # combine [X] into [BS,X]
+            xtrain_batch, ytrain_batch = tf.train.batch(
+            [xtrain_piece, ytrain_piece],
+            enqueue_many=False, # each feed is one single example
+            capacity=batch_size*3,
+            num_threads=2,
+            batch_size=batch_size)
+            # generate batches from feed.
+
+        y_infer = self.net.model(xtrain_batch)
+
+        self.net.summary()
+
+        loss = categorical_cross_entropy(y_infer,ytrain_batch)
+        gradloss = self.optimizer.compute_gradients(loss)
+        train_op = self.optimizer.apply_gradients(gradloss)
+
+        init_op = tf.global_variables_initializer()
+
+        sess = tf.Session()
+        print('init_op...')
+        sess.run(init_op)
+        print('load dataset into memory...')
+        sess.run(xtrain_var.initializer,feed_dict={xtrain_init: xtrain})
+        sess.run(ytrain_var.initializer,feed_dict={ytrain_init: ytrain})
+        # loaded into memory...
+
+        print('init coordinator...')
+        coord = tf.train.Coordinator()
+        print('starting queue runners...')
+        threads = tf.train.start_queue_runners(sess=sess, coord=coord)
+
+        try:
+            epoch_length = len(xtrain)
+            steps = int(epoch_length * num_epochs / batch_size)
+            for i in range(steps):
+                start_time = time.time()
+
+                res = sess.run([train_op,loss])
+                res = res[1:]
+                loss_value = res[0]
+
+                duration = time.time() - start_time
+
+                if i%100==0:
+                    print('{} step {:6.2f} sec, {:6.2f}/sec, loss:{:6.4f}'.format(
+                    i,duration,100/duration,loss_value
+                    ))
+
+        except tf.errors.OutOfRangeError:
+            print('OORE excepted, done?')
+
+        finally:
+            coord.request_stop()
+            print('stop requested')
+
+        print('joining...')
+        coord.join(threads) # wait for threads to finish
+        print('done.')

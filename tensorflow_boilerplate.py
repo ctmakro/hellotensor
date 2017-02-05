@@ -441,7 +441,7 @@ class ModelRunner:
 
 class AdvancedModelRunner:
     def check_things(self):
-        for i in ['optimizer','net']:
+        for i in ['optimizer','model']:
             if not hasattr(self,i):
                 raise NameError('check_things() failed:',i)
         print('things seem fine')
@@ -466,7 +466,8 @@ class AdvancedModelRunner:
             xtrain_piece, ytrain_piece = tf.train.slice_input_producer(
             [xtrain_var, ytrain_var],
             num_epochs=None, # dont raise that stupid OORE
-            capacity=batch_size*3
+            shuffle=False,
+            capacity=batch_size*16
             )
             # generate feed by slicing training data variables.
             # repeat for 1 epoch
@@ -475,14 +476,12 @@ class AdvancedModelRunner:
             xtrain_batch, ytrain_batch = tf.train.batch(
             [xtrain_piece, ytrain_piece],
             enqueue_many=False, # each feed is one single example
-            capacity=batch_size*3,
-            num_threads=2,
+            capacity=batch_size*16,
+            num_threads=1,
             batch_size=batch_size)
             # generate batches from feed.
 
-        y_infer = self.net.model(xtrain_batch)
-
-        self.net.summary()
+        y_infer = self.model(xtrain_batch)
 
         loss = categorical_cross_entropy(y_infer,ytrain_batch)
         gradloss = self.optimizer.compute_gradients(loss)

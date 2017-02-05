@@ -455,7 +455,8 @@ class AdvancedModelRunner:
     def epoch_runner_preload(self,xtrain,ytrain=None,xtest=None,ytest=None):
         self.check_things()
 
-        batch_size = 50
+        epoch_length = len(xtrain)
+        batch_size = 500
         num_epochs = 2
         # assume all of em are valid.
         with tf.name_scope('input_feeder'):
@@ -467,7 +468,7 @@ class AdvancedModelRunner:
             [xtrain_var, ytrain_var],
             num_epochs=None, # dont raise that stupid OORE
             shuffle=False,
-            capacity=batch_size*16
+            capacity = min(batch_size*4,epoch_length)
             )
             # generate feed by slicing training data variables.
             # repeat for 1 epoch
@@ -476,7 +477,7 @@ class AdvancedModelRunner:
             xtrain_batch, ytrain_batch = tf.train.batch(
             [xtrain_piece, ytrain_piece],
             enqueue_many=False, # each feed is one single example
-            capacity=batch_size*16,
+            capacity = min(batch_size*4,epoch_length),
             num_threads=1,
             batch_size=batch_size)
             # generate batches from feed.
@@ -503,7 +504,7 @@ class AdvancedModelRunner:
         threads = tf.train.start_queue_runners(sess=sess, coord=coord)
 
         try:
-            epoch_length = len(xtrain)
+
             steps = int(epoch_length * num_epochs / batch_size)
             start_time = time.time()
             for i in range(steps):

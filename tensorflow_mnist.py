@@ -97,7 +97,7 @@ def testmr():
     mr.set_acc(batch_accuracy(y,gt)) # optional. acc(y,gt)
 
     r = mr.get_epoch_runner(xtrain,ytrain,xtest,ytest)
-    r(2,50)
+    r(2,500)
 # r = mr.defaultEpochRunner(xtrain,ytrain)
 
 def testamr():

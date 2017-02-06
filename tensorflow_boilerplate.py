@@ -440,6 +440,9 @@ class ModelRunner:
         return r
 
 class AdvancedModelRunner:
+    def __init__(self):
+        self.ready = False
+
     def check_things(self):
         for i in ['optimizer','model']:
             if not hasattr(self,i):
@@ -452,16 +455,47 @@ class AdvancedModelRunner:
         var = tf.Variable(initializer,trainable=False,collections=[])
         return var,initializer
 
-    def epoch_runner_preload(self,xtrain,ytrain=None,xtest=None,ytest=None):
+    def get_ready_to_train(self):
         self.check_things()
 
-        epoch_length = len(xtrain)
-        batch_size = 500
-        num_epochs = 2
-        # assume all of em are valid.
-        with tf.name_scope('input_feeder'):
-            xtrain_var,xtrain_init = self.data_preloader_gen(xtrain)
-            ytrain_var,ytrain_init = self.data_preloader_gen(ytrain)
+    def get_epoch_runner_preload(self,xtrain,ytrain=None,xtest=None,ytest=None):
+
+        xtrain_var,xtrain_init = self.data_preloader_gen(xtrain)
+        ytrain_var,ytrain_init = self.data_preloader_gen(ytrain)
+
+        j = tf.placeholder(dtype=tf.int32, shape=[])
+        ph_batch_size = tf.placeholder(dtype=tf.int32, shape=[])
+        # scalar indicating start of batch.
+
+        xtrain_batch = xtrain_var[j:j+ph_batch_size]
+        ytrain_batch = ytrain_var[j:j+ph_batch_size]
+
+        ypred_batch = self.model(xtrain_batch)
+
+        loss = categorical_cross_entropy(ypred_batch,ytrain_batch)
+        gradloss = self.optimizer.compute_gradients(loss)
+        train_op = self.optimizer.apply_gradients(gradloss)
+
+        acc = batch_accuracy(ypred_batch,ytrain_batch)
+
+        init_op = tf.global_variables_initializer()
+
+        sess = tf.Session()
+        print('init_op...')
+        sess.run(init_op)
+        print('load dataset into memory...')
+        sess.run(xtrain_var.initializer,feed_dict={xtrain_init: xtrain})
+        sess.run(ytrain_var.initializer,feed_dict={ytrain_init: ytrain})
+        # loaded into memory...
+
+        def r(ep=10,bs=50):
+            if self.ready == False:
+                self.get_ready_to_train()
+
+            epoch_length = len(xtrain)
+            batch_size = bs
+            num_epochs = ep
+
         #
         #     # slice [N,X] into [X]
         #     xtrain_piece, ytrain_piece = tf.train.slice_input_producer(
@@ -484,42 +518,25 @@ class AdvancedModelRunner:
 
         # we shall use a better batching mechanism
 
-        j = tf.placeholder(dtype=tf.int32, shape=[])
-        # scalar indicating start of batch.
+            timer = TrainTimer()
+            nonlocal loss,acc,train_op,j,ph_batch_size,sess
 
-        xtrain_batch = xtrain_var[j:j+batch_size]
-        ytrain_batch = ytrain_var[j:j+batch_size]
+            for ep in range(num_epochs):
+                print('Ep',ep)
+                timer.epstart()
+                for i in range(0,epoch_length,batch_size):
+                    res = sess.run([train_op,loss,acc],
+                    feed_dict={j:i,ph_batch_size:batch_size})
 
-        ypred_batch = self.model(xtrain_batch)
+                    res = res[1:]
+                    loss_value = res[0]
+                    acc_value = res[1]
 
-        loss = categorical_cross_entropy(ypred_batch,ytrain_batch)
-        gradloss = self.optimizer.compute_gradients(loss)
-        train_op = self.optimizer.apply_gradients(gradloss)
+                    print('{} loss:{:6.4f} acc:{:6.4f}'.format(
+                    i,loss_value,acc_value))
 
-        init_op = tf.global_variables_initializer()
-
-        sess = tf.Session()
-        print('init_op...')
-        sess.run(init_op)
-        print('load dataset into memory...')
-        sess.run(xtrain_var.initializer,feed_dict={xtrain_init: xtrain})
-        sess.run(ytrain_var.initializer,feed_dict={ytrain_init: ytrain})
-        # loaded into memory...
-
-        timer = TrainTimer()
-
-        for ep in range(num_epochs):
-            print('Ep',ep)
-            timer.epstart()
-            for i in range(0,epoch_length,batch_size):
-                res = sess.run([train_op,loss],feed_dict={j:i})
-                res = res[1:]
-                loss_value = res[0]
-
-                print(i,'loss',loss_value)
-
-            timer.epend_report(epoch_length)
-
+                timer.epend_report(epoch_length)
+        return r
 
 
         # print('init coordinator...')

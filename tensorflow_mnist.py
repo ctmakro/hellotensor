@@ -5,45 +5,47 @@ from tensorflow_session import *
 import tensorflow as tf
 import numpy as np
 
-class mynet:
-    def __init__(self):
-        pass
-    def model_builder(self,name='mynet',reuse=False):
+class NetModel:
+    def __init__(self,modeler):
+        self.modeler = modeler
+
+    def model_builder(self,name,reuse=False):
         def model(inp):
+            print('building model...')
             with tf.variable_scope(name,reuse=reuse):
-                print('building model...')
-
-                i = inp
-                i = tf.reshape(i,[-1,28,28,1]) # reshape into 4d tensor
-
-                i = conv2d(1,16,3)(i)
-
-                # i = resconv(i,16,16)
-                i = resconv(i,16,16)
-                i = resconv(i,16,16,std=2)
-
-                # i = resconv(i,16,16)
-                i = resconv(i,16,16)
-                i = resconv(i,16,32,std=2)
-
-                # i = resconv(i,32,32)
-                i = resconv(i,32,32)
-                i = resconv(i,32,64,std=2)
-
-                i = bn(i)
-                i = relu(i)
-                i = conv2d(64,10,1)(i)
-
-                i = tf.reduce_mean(i,[1,2]) # 2d tensor (N, onehot)
-
-                out = i
-                print('model built.')
-
+                out = self.modeler(inp)
+            print('model built.')
             summary_scope(name)
             return out
         return model
 
-net = mynet()
+def resnet(inp):
+    i = inp
+    i = tf.reshape(i,[-1,28,28,1]) # reshape into 4d tensor
+
+    i = conv2d(1,16,3)(i)
+
+    i = resconv(i,16,16)
+    i = resconv(i,16,16)
+    i = resconv(i,16,16,std=2)
+
+    i = resconv(i,16,16)
+    i = resconv(i,16,16)
+    i = resconv(i,16,32,std=2)
+
+    i = resconv(i,32,32)
+    i = resconv(i,32,32)
+    i = resconv(i,32,64,std=2)
+
+    i = bn(i)
+    i = relu(i)
+    i = conv2d(64,10,1)(i)
+
+    i = tf.reduce_mean(i,[1,2]) # 2d tensor (N, onehot)
+
+    return i
+
+netmod = NetModel(resnet)
 
 # f = make_function(x,y)
 
@@ -87,8 +89,10 @@ xtrain,ytrain,xtest,ytest = mnist_data()
 
 def testmr():
     x = tf.placeholder(tf.float32, shape=[None, 784])
-    model = net.model_builder('mynet_testmr') # use same name to share params.
+
+    model = netmod.model_builder('mynet_testmr') # reuse params
     y = model(x)
+
     gt = tf.placeholder(tf.float32, shape=[None, 10])
 
     mr = ModelRunner(inputs=x,outputs=y,gt=gt)
@@ -97,12 +101,14 @@ def testmr():
     mr.set_acc(batch_accuracy(y,gt)) # optional. acc(y,gt)
 
     r = mr.get_epoch_runner(xtrain,ytrain,xtest,ytest)
-    r(2,500)
+    r(2,50)
 # r = mr.defaultEpochRunner(xtrain,ytrain)
 
 def testamr():
     amr = AdvancedModelRunner()
-    amr.model = net.model_builder('mynet_testamr')
+    amr.model = netmod.model_builder('mynet_testamr')
 
     amr.optimizer = Adam(1e-3)
-    amr.epoch_runner_preload(xtrain,ytrain)
+    r = amr.get_epoch_runner_preload(xtrain,ytrain)
+
+    r(2,50)

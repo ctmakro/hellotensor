@@ -462,29 +462,37 @@ class AdvancedModelRunner:
         with tf.name_scope('input_feeder'):
             xtrain_var,xtrain_init = self.data_preloader_gen(xtrain)
             ytrain_var,ytrain_init = self.data_preloader_gen(ytrain)
+        #
+        #     # slice [N,X] into [X]
+        #     xtrain_piece, ytrain_piece = tf.train.slice_input_producer(
+        #     [xtrain_var, ytrain_var],
+        #     num_epochs=None, # dont raise that stupid OORE
+        #     shuffle=False,
+        #     capacity = min(batch_size*4,epoch_length)
+        #     )
+        #     # generate feed by slicing training data variables.
+        #     # repeat for 1 epoch
+        #
+        #     # combine [X] into [BS,X]
+        #     xtrain_batch, ytrain_batch = tf.train.batch(
+        #     [xtrain_piece, ytrain_piece],
+        #     enqueue_many=False, # each feed is one single example
+        #     capacity = min(batch_size*4,epoch_length),
+        #     num_threads=1,
+        #     batch_size=batch_size)
+        #     # generate batches from feed.
 
-            # slice [N,X] into [X]
-            xtrain_piece, ytrain_piece = tf.train.slice_input_producer(
-            [xtrain_var, ytrain_var],
-            num_epochs=None, # dont raise that stupid OORE
-            shuffle=False,
-            capacity = min(batch_size*4,epoch_length)
-            )
-            # generate feed by slicing training data variables.
-            # repeat for 1 epoch
+        # we shall use a better batching mechanism
 
-            # combine [X] into [BS,X]
-            xtrain_batch, ytrain_batch = tf.train.batch(
-            [xtrain_piece, ytrain_piece],
-            enqueue_many=False, # each feed is one single example
-            capacity = min(batch_size*4,epoch_length),
-            num_threads=1,
-            batch_size=batch_size)
-            # generate batches from feed.
+        j = tf.placeholder(dtype=tf.int32, shape=[])
+        # scalar indicating start of batch.
 
-        y_infer = self.model(xtrain_batch)
+        xtrain_batch = xtrain_var[j:j+batch_size]
+        ytrain_batch = ytrain_var[j:j+batch_size]
 
-        loss = categorical_cross_entropy(y_infer,ytrain_batch)
+        ypred_batch = self.model(xtrain_batch)
+
+        loss = categorical_cross_entropy(ypred_batch,ytrain_batch)
         gradloss = self.optimizer.compute_gradients(loss)
         train_op = self.optimizer.apply_gradients(gradloss)
 
@@ -498,37 +506,53 @@ class AdvancedModelRunner:
         sess.run(ytrain_var.initializer,feed_dict={ytrain_init: ytrain})
         # loaded into memory...
 
-        print('init coordinator...')
-        coord = tf.train.Coordinator()
-        print('starting queue runners...')
-        threads = tf.train.start_queue_runners(sess=sess, coord=coord)
+        timer = TrainTimer()
 
-        try:
-
-            steps = int(epoch_length * num_epochs / batch_size)
-            start_time = time.time()
-            for i in range(steps):
-
-                res = sess.run([train_op,loss])
+        for ep in range(num_epochs):
+            print('Ep',ep)
+            timer.epstart()
+            for i in range(0,epoch_length,batch_size):
+                res = sess.run([train_op,loss],feed_dict={j:i})
                 res = res[1:]
                 loss_value = res[0]
 
-                if i%100==0:
-                    duration = time.time() - start_time
+                print(i,'loss',loss_value)
 
-                    print('{} step {:6.2f} sec, {:6.2f}/sec, loss:{:6.4f}'.format(
-                    i,duration,100*batch_size/duration,loss_value
-                    ))
+            timer.epend_report(epoch_length)
 
-                    start_time += duration
 
-        except tf.errors.OutOfRangeError:
-            print('OORE excepted, done?')
 
-        finally:
-            coord.request_stop()
-            print('stop requested')
-
-        print('joining...')
-        coord.join(threads) # wait for threads to finish
-        print('done.')
+        # print('init coordinator...')
+        # coord = tf.train.Coordinator()
+        # print('starting queue runners...')
+        # threads = tf.train.start_queue_runners(sess=sess, coord=coord)
+        #
+        # try:
+        #
+        #     steps = int(epoch_length * num_epochs / batch_size)
+        #     start_time = time.time()
+        #     for i in range(steps):
+        #
+        #         res = sess.run([train_op,loss])
+        #         res = res[1:]
+        #         loss_value = res[0]
+        #
+        #         if i%100==0:
+        #             duration = time.time() - start_time
+        #
+        #             print('{} step {:6.2f} sec, {:6.2f}/sec, loss:{:6.4f}'.format(
+        #             i,duration,100*batch_size/duration,loss_value
+        #             ))
+        #
+        #             start_time += duration
+        #
+        # except tf.errors.OutOfRangeError:
+        #     print('OORE excepted, done?')
+        #
+        # finally:
+        #     coord.request_stop()
+        #     print('stop requested')
+        #
+        # print('joining...')
+        # coord.join(threads) # wait for threads to finish
+        # print('done.')

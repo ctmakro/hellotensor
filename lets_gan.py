@@ -235,7 +235,7 @@ def gan(gm,gmf,dm,dmf):
     def ccel(x):
         gs=x[0]
         rs=x[1]
-        loss = - (K.log(1-gs+eps) + 0.1 * K.log(1-rs+eps) + 0.9 * K.log(rs+eps)) #sside lbl smoothing
+        loss = - (K.log(1-gs+eps) + 0.01 * K.log(1-rs+eps) + 0.99 * K.log(rs+eps)) #sside lbl smoothing
         return loss
 
     def calc_output_shape(input_shapes):
@@ -271,7 +271,7 @@ dmt,gmt,gant = gan(gm,gmf,dm,dmf)
 
 print('Ready. enter r() to train')
 
-def r(ep=10,noise_level=1.):
+def r(ep=1000,noise_level=.01):
     for i in range(ep):
         noise_level *= 0.99
         print('iter',i,'noise',noise_level)
@@ -304,7 +304,7 @@ def r(ep=10,noise_level=1.):
         # nb_epoch=1
         # )
 
-        if i==ep-1 or i % 1==0: show()
+        if i==ep-1 or i % 10==0: show()
 
 def autoscaler(img):
     limit = 400.

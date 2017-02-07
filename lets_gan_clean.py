@@ -23,7 +23,7 @@ nb_classes = 10
 nb_epoch = 200
 eps=1e-11
 
-zed = 32
+zed = 100
 
 def cifar():
     # input image dimensions

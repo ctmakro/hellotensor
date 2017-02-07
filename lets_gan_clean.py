@@ -81,7 +81,7 @@ def gen2(): # generative network, 2
     i = deconv(i,nop=ngf*2,kw=4,oh=16,ow=16,std=2)
     i = deconv(i,nop=ngf*1,kw=4,oh=32,ow=32,std=2)
 
-    i = deconv(i,nop=3,kw=2,oh=32,ow=32,std=1,tail=False) # out : 32x32
+    i = deconv(i,nop=3,kw=4,oh=32,ow=32,std=1,tail=False) # out : 32x32
     i = Activation('tanh')(i)
 
     m = Model(input=inp,output=i)

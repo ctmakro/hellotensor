@@ -41,7 +41,7 @@ def cifar():
     # X_test = X_test[5000:10000]
     # y_test = y_test[5000:10000]
 
-    X_train = X_train[:,8:24,8:24,:]
+    # X_train = X_train[:,8:24,8:24,:]
 
     print('X_train shape:', X_train.shape)
     print(X_train.shape[0], 'train samples')
@@ -115,14 +115,14 @@ def gen2(): # generative network, 2
             i = relu(i)
         return i
 
-    i = deconv(i,nop=ngf*8,kw=2,oh=2,ow=2,std=1,bm='valid')
-    i = deconv(i,nop=ngf*4,kw=4,oh=4,ow=4,std=2)
-    i = deconv(i,nop=ngf*2,kw=4,oh=8,ow=8,std=2)
-    i = deconv(i,nop=ngf*1,kw=4,oh=16,ow=16,std=2,tail=False)
+    i = deconv(i,nop=ngf*8,kw=4,oh=4,ow=4,std=1,bm='valid')
+    i = deconv(i,nop=ngf*4,kw=4,oh=8,ow=8,std=2)
+    i = deconv(i,nop=ngf*2,kw=4,oh=16,ow=16,std=2)
+    i = deconv(i,nop=ngf*1,kw=4,oh=32,ow=32,std=2,tail=False)
     i = relu(i)
     # i = deconv(i,nop=3,kw=4,oh=32,ow=32,std=2,tail=False) # out : 32x32
 
-    i = deconv(i,nop=3,kw=4,oh=16,ow=16,std=1,tail=False)
+    i = deconv(i,nop=3,kw=4,oh=32,ow=32,std=1,tail=False)
     i = Activation('tanh')(i)
 
     m = Model(input=inp,output=i)
@@ -177,7 +177,7 @@ def dis(): # discriminative network
 
 def dis2(): # discriminative network, 2
     # inp = Input(shape=(None,None,3))
-    inp = Input(shape=(16,16,3))
+    inp = Input(shape=(32,32,3))
     i = inp
 
     ndf=16
@@ -192,7 +192,7 @@ def dis2(): # discriminative network, 2
         i = relu(i)
         return i
 
-    i = conv(i,ndf,4,std=1,usebn=False)
+    i = conv(i,ndf,4,std=2,usebn=False)
     i = concat_diff(i)
     i = conv(i,ndf*2,4,std=2)
     i = concat_diff(i)
@@ -226,7 +226,7 @@ dm.summary()
 def gan(gm,gmf,dm,dmf):
     noise = Input(shape=(zed,))
     noise2 = Input(shape=(zed,))
-    real_image = Input(shape=(16,16,3))
+    real_image = Input(shape=(32,32,3))
 
     generated = gmf(noise)
     gscore = dm(generated)
@@ -235,7 +235,7 @@ def gan(gm,gmf,dm,dmf):
     def ccel(x):
         gs=x[0]
         rs=x[1]
-        loss = - (K.log(1-gs+eps) + 0.01 * K.log(1-rs+eps) + 0.99 * K.log(rs+eps)) #sside lbl smoothing
+        loss = - (K.log(1-gs+eps) + 0.1 * K.log(1-rs+eps) + 0.9 * K.log(rs+eps)) #sside lbl smoothing
         return loss
 
     def calc_output_shape(input_shapes):

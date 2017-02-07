@@ -1,10 +1,12 @@
 from __future__ import print_function
 
+import tensorflow as tf
+
 from keras.datasets import cifar10
 from keras.preprocessing.image import ImageDataGenerator
 from keras.models import *
 from keras.layers import *
-from keras.optimizers import *
+# from keras.optimizers import *
 from keras.utils import np_utils
 import keras
 import keras.backend as K
@@ -22,7 +24,7 @@ nb_classes = 10
 nb_epoch = 200
 eps=1e-11
 
-zed = 64
+zed = 32
 
 # data_augmentation = True
 
@@ -65,6 +67,8 @@ print('loading cifar...')
 xt,yt,xv,yv = cifar()
 
 from keras_resnet import relu,cake,gen_cake
+def relu(i):
+    return LeakyReLU(.2)(i)
 
 def bn(i):
     return BatchNormalization()(i)
@@ -105,7 +109,7 @@ def gen2(): # generative network, 2
     i = inp
     i = Reshape((1,1,zed))(i)
 
-    ngf=16
+    ngf=24
 
     def deconv(i,nop,kw,oh,ow,std=1,tail=True,bm='same'):
         global batch_size
@@ -118,11 +122,9 @@ def gen2(): # generative network, 2
     i = deconv(i,nop=ngf*8,kw=4,oh=4,ow=4,std=1,bm='valid')
     i = deconv(i,nop=ngf*4,kw=4,oh=8,ow=8,std=2)
     i = deconv(i,nop=ngf*2,kw=4,oh=16,ow=16,std=2)
-    i = deconv(i,nop=ngf*1,kw=4,oh=32,ow=32,std=2,tail=False)
-    i = relu(i)
-    # i = deconv(i,nop=3,kw=4,oh=32,ow=32,std=2,tail=False) # out : 32x32
+    i = deconv(i,nop=ngf*1,kw=4,oh=32,ow=32,std=2)
 
-    i = deconv(i,nop=3,kw=4,oh=32,ow=32,std=1,tail=False)
+    i = deconv(i,nop=3,kw=2,oh=32,ow=32,std=1,tail=False) # out : 32x32
     i = Activation('tanh')(i)
 
     m = Model(input=inp,output=i)
@@ -180,19 +182,19 @@ def dis2(): # discriminative network, 2
     inp = Input(shape=(32,32,3))
     i = inp
 
-    ndf=16
+    ndf=24
 
     # i = Convolution2D(ndf,4,4,border_mode='same',subsample=(1,1))(i)
     # i = relu(i)
 
-    def conv(i,nop,kw,std=1,usebn=True):
-        i = Convolution2D(nop,kw,kw,border_mode='same',subsample=(std,std))(i)
+    def conv(i,nop,kw,std=1,usebn=True,bm='same'):
+        i = Convolution2D(nop,kw,kw,border_mode=bm,subsample=(std,std))(i)
         if usebn:
             i = bn(i)
         i = relu(i)
         return i
 
-    i = conv(i,ndf,4,std=2,usebn=False)
+    i = conv(i,ndf*1,4,std=2,usebn=False)
     i = concat_diff(i)
     i = conv(i,ndf*2,4,std=2)
     i = concat_diff(i)
@@ -200,6 +202,10 @@ def dis2(): # discriminative network, 2
     i = concat_diff(i)
     i = conv(i,ndf*8,4,std=2)
     i = concat_diff(i)
+
+    # in: 2x2
+    # i = conv(i,n,2,std=1)
+    # 1x1
     i = Convolution2D(1,2,2,border_mode='valid')(i)
 
     # i = concat_diff(i)
@@ -223,57 +229,124 @@ print('generating D...')
 dm,dmf = dis2()
 dm.summary()
 
-def gan(gm,gmf,dm,dmf):
+def gan(gm,dm):
+    # this is the fastest way to train a GAN in Keras
+    # two models are updated simutaneously in one pass
+
     noise = Input(shape=(zed,))
-    noise2 = Input(shape=(zed,))
+    # noise2 = Input(shape=(zed,))
     real_image = Input(shape=(32,32,3))
 
-    generated = gmf(noise)
+    generated = gm(noise)
     gscore = dm(generated)
     rscore = dm(real_image)
 
-    def ccel(x):
-        gs=x[0]
-        rs=x[1]
-        loss = - (K.log(1-gs+eps) + 0.1 * K.log(1-rs+eps) + 0.9 * K.log(rs+eps)) #sside lbl smoothing
-        return loss
+    # def ccel(x):
+    #     gs=x[0]
+    #     rs=x[1]
+    #     loss = - (K.log(1-gs+eps) + 0.1 * K.log(1-rs+eps) + 0.9 * K.log(rs+eps)) #sside lbl smoothing
+    #     return loss
+    #
+    # def calc_output_shape(input_shapes):
+    #     return input_shapes[0]
 
-    def calc_output_shape(input_shapes):
-        return input_shapes[0]
-
-    dloss = merge([gscore,rscore],mode=ccel,output_shape=calc_output_shape,name='dloss')
+    # dloss = merge([gscore,rscore],mode=ccel,output_shape=calc_output_shape,name='dloss')
     # out = Lambda(lambda x:- K.log(1-x[0]) - K.log(x[1]))([gscore,rscore])
-    dm_trainer = Model(input=[real_image,noise],output=dloss)
 
-    def thru(y_true,y_pred):
-        return y_pred
+    # dm_trainer = Model(input=[real_image,noise],output=[gscore,rscore])
 
-    g2 = gm(noise2)
-    gscore2 = dmf(g2)
-    gloss = Lambda(lambda x:- K.log(x+eps),name='gloss')(gscore2)
+    def log_eps(i):
+        return K.log(i+1e-11)
 
-    gm_trainer = Model(input=noise2,output=gloss)
+    # single side label smoothing: replace 1.0 with 0.9
+    dloss = - K.mean(log_eps(1-gscore) + .1 * log_eps(1-rscore) + .9 * log_eps(rscore))
+    gloss = - K.mean(log_eps(gscore))
+
+    Adam = tf.train.AdamOptimizer
 
     lr,b1 = 1e-4,.2
+    optimizer = Adam(lr,beta1=b1)
 
-    gan_trainer = Model(input=[real_image,noise,noise2],output=[dloss,gloss])
-    gan_trainer.compile(loss=[thru,thru],optimizer=Adam(lr=lr,beta_1=b1))
+    grad_loss_wd = optimizer.compute_gradients(dloss, dm.trainable_weights)
+    update_wd = optimizer.apply_gradients(grad_loss_wd)
 
-    dm_trainer.compile(loss=thru,optimizer=Adam(lr=lr,beta_1=b1))
-    gm_trainer.compile(loss=thru,optimizer=Adam(lr=lr,beta_1=b1))
+    # optimizer = Adam(1e-4)
+
+    grad_loss_wg = optimizer.compute_gradients(gloss, gm.trainable_weights)
+    update_wg = optimizer.apply_gradients(grad_loss_wg)
+
+    def get_internal_updates(model):
+        # get all internal update ops (like moving averages) of a model
+        inbound_nodes = model.inbound_nodes
+        input_tensors = []
+        for ibn in inbound_nodes:
+            input_tensors+= ibn.input_tensors
+        updates = [model.get_updates_for(i) for i in input_tensors]
+        return updates
+
+    other_parameter_updates = [get_internal_updates(m) for m in [dm,gm]]
+    # those updates includes batch norm.
+
+    print('other_parameter_updates for the models(mainly for batch norm):')
+    print(other_parameter_updates)
+
+    train_step = [update_wd, update_wg, other_parameter_updates]
+    losses = [dloss,gloss]
+
+    learning_phase = tf.get_default_graph().get_tensor_by_name(
+        'keras_learning_phase:0')
+
+    def gan_feed(sess,batch_image,z_input):
+        nonlocal train_step,losses,noise,real_image,learning_phase
+
+        res = sess.run([train_step,losses],feed_dict={
+        noise:z_input,
+        real_image:batch_image,
+        learning_phase:True,
+        # Keras layers needs to know whether
+        # this run is training or testring (you know, batch norm and dropout)
+        })
+
+        loss_values = res[1]
+        return loss_values #[dloss,gloss]
+
+    # K.get_session().run(tf.global_variables_initializer())
+
+    return gan_feed
+
+    # def thru(y_true,y_pred):
+    #     return y_pred
+    #
+    # g2 = gm(noise2)
+    # gscore2 = dmf(g2)
+    # gloss = Lambda(lambda x:- K.log(x+eps),name='gloss')(gscore2)
+    #
+    # gm_trainer = Model(input=noise2,output=gloss)
+    #
+    # lr,b1 = 1e-4,.2
+    #
+    # gan_trainer = Model(input=[real_image,noise,noise2],output=[dloss,gloss])
+    # gan_trainer.compile(loss=[thru,thru],optimizer=Adam(lr=lr,beta_1=b1))
+
+    # dm_trainer.compile(loss=thru,optimizer=Adam(lr=lr,beta_1=b1))
+    # gm_trainer.compile(loss=thru,optimizer=Adam(lr=lr,beta_1=b1))
 
     # return gan_trainer
-    return dm_trainer,gm_trainer,gan_trainer
+    # return dm_trainer,gm_trainer,gan_trainer
 
 print('generating GAN...')
-dmt,gmt,gant = gan(gm,gmf,dm,dmf)
+# dmt,gmt,gant = gan(gm,gmf,dm,dmf)
 # gant = gan(gm,gmf,dm,dmf)
+gan_feed = gan(gm,dm)
 
 print('Ready. enter r() to train')
 
 def r(ep=1000,noise_level=.01):
+    sess = K.get_session()
+
     for i in range(ep):
         noise_level *= 0.99
+        print('---------------------------')
         print('iter',i,'noise',noise_level)
         batches = 1
         total = batch_size*batches
@@ -283,20 +356,24 @@ def r(ep=1000,noise_level=.01):
         subset_cifar += np.random.normal(loc=0.,scale=noise_level,size=subset_cifar.shape) # add gaussian term
 
         z_input = np.random.normal(loc=0.,scale=1.,size=(total,zed))
-        z_input2 = np.random.normal(loc=0.,scale=1.,size=(total,zed))
-        dummy = np.zeros((total,1))
+        # z_input2 = np.random.normal(loc=0.,scale=1.,size=(total,zed))
+        # dummy = np.zeros((total,1))
 
-        dmt.fit([subset_cifar,z_input],
-        dummy,
-        batch_size=batch_size,
-        nb_epoch=1
-        )
+        # dmt.fit([subset_cifar,z_input],
+        # dummy,
+        # batch_size=batch_size,
+        # nb_epoch=1
+        # )
+        #
+        # gmt.fit(z_input2,
+        # dummy,
+        # batch_size=batch_size,
+        # nb_epoch=1
+        # )
 
-        gmt.fit(z_input2,
-        dummy,
-        batch_size=batch_size,
-        nb_epoch=1
-        )
+        losses = gan_feed(sess,subset_cifar,z_input)
+        # print(losses)
+        print('dloss:{:6.4f} gloss:{:6.4f}'.format(losses[0],losses[1]))
 
         # gant.fit([subset_cifar,z_input,z_input2],
         # [dummy,dummy],

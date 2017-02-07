@@ -209,25 +209,27 @@ gan_feed = gan(gm,dm)
 
 print('Ready. enter r() to train')
 
-def r(ep=1000,noise_level=.01):
+def r(ep=10000,noise_level=.01):
     sess = K.get_session()
+
+    np.random.shuffle(xt)
+    shuffled_cifar = xt
+    length = len(shuffled_cifar)
 
     for i in range(ep):
         noise_level *= 0.99
         print('---------------------------')
         print('iter',i,'noise',noise_level)
-        batches = 1
-        total = batch_size*batches
-        indices = np.random.choice(50000,total,replace=False)
 
-        # random sample from cifar
-        subset_cifar = np.take(xt,indices,axis=0)
-        subset_cifar += np.random.normal(loc=0.,scale=noise_level,size=subset_cifar.shape)
-        # add gaussian term
-        z_input = np.random.normal(loc=0.,scale=1.,size=(total,zed))
+        # sample from cifar
+        j = i % int(length/batch_size)
+        minibatch = shuffled_cifar[j*batch_size:(j+1)*batch_size]
+        # minibatch += np.random.normal(loc=0.,scale=noise_level,size=subset_cifar.shape)
+
+        z_input = np.random.normal(loc=0.,scale=1.,size=(batch_size,zed))
 
         # train for one step
-        losses = gan_feed(sess,subset_cifar,z_input)
+        losses = gan_feed(sess,minibatch,z_input)
         print('dloss:{:6.4f} gloss:{:6.4f}'.format(losses[0],losses[1]))
 
         if i==ep-1 or i % 10==0: show()

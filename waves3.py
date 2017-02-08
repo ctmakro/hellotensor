@@ -13,8 +13,11 @@ import keras.backend as K
 from waves import song,loadfile,show_waterfall,play,fs
 
 sample_length = 1024
-time_steps = 64 # about 1s
+time_steps = 60 # about 1s
 zed = 32
+
+def bn(i):
+    return BatchNormalization(axis=-1)(i)
 
 def relu(i):
     return LeakyReLU(0.2)(i)
@@ -35,31 +38,37 @@ def dis():
 
     i = c1d(16, dim=4, std=1)(i) # 1024
 
-    for k in reversed(range(10)):
-        # k = 9..0
+    for k in range(10):
+        # k = 0..9
+        feat = min(2**k * 16, 64)
+        i = bn(i)
         i = relu(i)
-        i = c1d(16,dim=4,std=2)(i) # 512..1
+        i = c1d(feat,dim=4,std=2)(i) # 512..1
 
     # now shape: (batch, time_steps, 16)
 
-    i = LSTM(16,
+    i = LSTM(32,
         input_dim=16,
         input_length=time_steps,
         return_sequences=False,
-        stateful=False)(i)
+        stateful=False,
+        consume_less='gpu')(i)
 
-    # now shape: (batch, 16)
+    # now shape: (batch, 32)
 
-    i = Dense(16)(i)
-    i = relu(i)
-    i = Dense(16)(i)
     i = relu(i)
     i = Dense(1)(i)
     i = Activation('sigmoid')(i) # score
 
     model = Model(input=inp,output=i)
     return model
-
+    
+config = tf.ConfigProto()
+# config.gpu_options.per_process_gpu_memory_fraction = 0.9
+config.gpu_options.allow_growth = True
+session = tf.Session(config=config)
+K.set_session(session)
+    
 def hole_strech(i,axis): # make holes in input data, eg [1,2] -> [1,0,2,0]
     def makehole(a):
         s = tf.shape(a)
@@ -78,19 +87,12 @@ def gen():
     # shape: (batch, time_steps, zed)
     inp = i
 
-    i = Convolution1D(16, 1)(i)
-    i = relu(i)
-
-    i = Convolution1D(16, 1)(i)
-    i = relu(i)
-
-    # batch, time_steps, 16
-
-    i = LSTM(16,
-        input_dim=16,
+    i = LSTM(32,
+        input_dim=zed,
         input_length=time_steps,
         return_sequences=True,
-        stateful=False)(i)
+        stateful=False,
+        consume_less='gpu')(i)
 
     # shape: (batch, time_steps, 16)
     # now try to deconv it into sample_length...
@@ -110,12 +112,15 @@ def gen():
 
     # 1
 
-    for k in range(10): # 0..9
-        i = ct1d(16,4,std=2)(i) # time_steps*2
+    for k in reversed(range(10)): # 9..0
+        feat = min(2**k * 16,64)
+        
+        i = ct1d(feat,4,std=2)(i) # time_steps*2
+        i = bn(i)
         i = relu(i)
 
     # batch, time_steps * 1024, feat
-    i = relu(i)
+   
     i = ct1d(1, 1, std=1)(i) # shape: (batch, time_steps*1024, 1)
     i = Activation('tanh')(i)
 
@@ -143,12 +148,12 @@ def gan(g,d):
         return K.log(i+1e-11)
 
     # single side label smoothing: replace 1.0 with 0.9
-    dloss = - K.mean(log_eps(1-gscore) + .1 * log_eps(1-rscore) + .9 * log_eps(rscore))
+    dloss = - K.mean(log_eps(1-gscore) + .01 * log_eps(1-rscore) + .99 * log_eps(rscore))
     gloss = - K.mean(log_eps(gscore))
 
     Adam = tf.train.AdamOptimizer
 
-    lr,b1 = 1e-4,.2 # otherwise won't converge.
+    lr,b1 = 1e-3,.1 # otherwise won't converge.
     optimizer = Adam(lr,beta1=b1)
 
     grad_loss_wd = optimizer.compute_gradients(dloss, d.trainable_weights)
@@ -201,13 +206,15 @@ gan_feed = gan(gm,dm)
 
 print('Ready. enter r() to train')
 
+floatsong = song.astype('float32') / 32767.
+
 def r(ep=10000,noise_level=.01):
     sess = K.get_session()
 
-    batch_size = 32
+    batch_size = 4
     length_example = sample_length * time_steps
     length_batch = batch_size * length_example
-    srange = len(song) - length_batch
+    srange = len(floatsong) - length_batch
 
     for i in range(ep):
         noise_level *= 0.99
@@ -216,7 +223,7 @@ def r(ep=10000,noise_level=.01):
 
         # sample from song
         j = np.random.choice(srange)
-        minibatch = song[j:j+length_batch,0] # use mono
+        minibatch = floatsong[j:j+length_batch,0] # use mono
         minibatch = np.reshape(minibatch,[batch_size,length_example,1])
 
         # minibatch += np.random.normal(loc=0.,scale=noise_level,size=subset_cifar.shape)

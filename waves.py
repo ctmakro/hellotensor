@@ -12,7 +12,7 @@ def loadfile(fname,type='mp3'):
     song = AudioSegment.from_file(fname,type)
     raw = song[:].raw_data
     npsong = np.fromstring(string=raw,dtype='int16') # assume int16
-    npsong = npsong.reshape((len(npsong)/2,2)) # assume stereo
+    npsong = npsong.reshape((int(len(npsong)/2),2)) # assume stereo
     return npsong
 
 def play(tensor): # (length,2) or (length,) tensor
@@ -23,15 +23,15 @@ def waterfall(tensor1d):
 
     window = 512 # even number, 2^n best
     tiling = 2 # overlapping between windows, larger -> more overlapping
-    windows = len(tensor1d)/window * tiling - tiling
+    windows = int(len(tensor1d)/window * tiling - tiling)
 
-    wfall = np.zeros((windows,window/2+1),dtype='float32')
+    wfall = np.zeros((int(windows),int(window/2+1)),dtype='float32')
 
     hanning_window = np.hanning(window)
     # thx to https://kevinsprojects.wordpress.com/2014/12/13/short-time-fourier-transform-using-python-and-numpy/
 
     for i in range(windows):
-        start = i * window / tiling
+        start = int(i * window / tiling)
         sliced = tensor1d[start:start+window]
         sp = spectrum(sliced*hanning_window)
         # print(sp.shape)
@@ -54,7 +54,7 @@ def show_waterfall(tensor1d): # show waterfall of mono audio
 
     img = np.power(img,0.4545*0.5) # 2.2 Gamma * 2 Gamma
     img -= np.min(img)
-    img = img/np.max(img)
+    img = img / max(np.max(img),1e-10)
 
     vis.autoscaler_show(img.T,limit=1000.)
 

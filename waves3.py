@@ -224,7 +224,8 @@ def r(ep=10000,noise_level=.01):
         # sample from song
         j = np.random.choice(srange)
         minibatch = floatsong[j:j+length_batch,0] # use mono
-        minibatch = np.reshape(minibatch,[batch_size,length_example,1])
+        # minibatch = np.reshape(minibatch,[batch_size,length_example,1])
+        minibatch.shape = (batch_size,length_example,1)
 
         # minibatch += np.random.normal(loc=0.,scale=noise_level,size=subset_cifar.shape)
 

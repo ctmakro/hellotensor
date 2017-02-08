@@ -153,7 +153,7 @@ def gan(g,d):
 
     Adam = tf.train.AdamOptimizer
 
-    lr,b1 = 1e-3,.1 # otherwise won't converge.
+    lr,b1 = 1e-4,.2 # otherwise won't converge.
     optimizer = Adam(lr,beta1=b1)
 
     grad_loss_wd = optimizer.compute_gradients(dloss, d.trainable_weights)

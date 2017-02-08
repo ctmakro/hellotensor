@@ -113,8 +113,8 @@ def gen():
     # 1
 
     for k in reversed(range(10)): # 9..0
-        feat = min(2**k * 16,64)
-        
+        feat = min(2**k * 16,72)
+
         i = ct1d(feat,4,std=2)(i) # time_steps*2
         i = bn(i)
         i = relu(i)
@@ -239,11 +239,14 @@ def r(ep=10000,noise_level=.01):
 
 def show():
     length = 1 # 32 * 32768 samples
-    snd = gm.predict(np.random.normal(loc=0,scale=1,size=(length,time_steps,zed)))
-    snd = snd.reshape((snd.shape[0]*snd.shape[1],))
-    print('snd shape:',snd.shape)
+    psnd = gm.predict(np.random.normal(loc=0,scale=1,size=(length,time_steps,zed)))
+    snd = psnd.view()
+    snd.shape = (snd.shape[0]*snd.shape[1],)
+    variance = np.var(snd) * 2.
+    print('snd shape:',snd.shape,'var:',variance)
+    audible = np.clip(snd / variance, a_min=-1.,a_max=1.)
 
     # following functions are prepared for 16bit signed audio
-    snd16bit = (snd*32000.).astype('int32')
+    snd16bit = (audible*32700.).astype('int16')
     play(snd16bit)
     show_waterfall(snd16bit)

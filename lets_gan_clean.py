@@ -87,7 +87,7 @@ def gen2(): # generative network, 2
     m = Model(input=inp,output=i)
     return m
 
-def concat_diff(i):
+def concat_diff(i): # batch discrimination -  increase generation diversity.
     # return i
     bv = Lambda(lambda x:K.mean(K.abs(x[:] - K.mean(x,axis=0)),axis=-1,keepdims=True))(i)
     i = merge([i,bv],mode='concat')
@@ -135,18 +135,18 @@ print('generating D...')
 dm = dis2()
 dm.summary()
 
-def gan(gm,dm):
+def gan(g,d):
     # initialize a GAN trainer
 
     # this is the fastest way to train a GAN in Keras
     # two models are updated simutaneously in one pass
 
-    noise = Input(shape=(zed,))
-    real_image = Input(shape=(32,32,3))
+    noise = Input(shape=g.input_shape[1:])
+    real_data = Input(shape=d.input_shape[1:])
 
-    generated = gm(noise)
-    gscore = dm(generated)
-    rscore = dm(real_image)
+    generated = g(noise)
+    gscore = d(generated)
+    rscore = d(real_data)
 
     def log_eps(i):
         return K.log(i+1e-11)
@@ -160,10 +160,10 @@ def gan(gm,dm):
     lr,b1 = 1e-4,.2 # otherwise won't converge.
     optimizer = Adam(lr,beta1=b1)
 
-    grad_loss_wd = optimizer.compute_gradients(dloss, dm.trainable_weights)
+    grad_loss_wd = optimizer.compute_gradients(dloss, d.trainable_weights)
     update_wd = optimizer.apply_gradients(grad_loss_wd)
 
-    grad_loss_wg = optimizer.compute_gradients(gloss, gm.trainable_weights)
+    grad_loss_wg = optimizer.compute_gradients(gloss, g.trainable_weights)
     update_wg = optimizer.apply_gradients(grad_loss_wg)
 
     def get_internal_updates(model):
@@ -175,7 +175,7 @@ def gan(gm,dm):
         updates = [model.get_updates_for(i) for i in input_tensors]
         return updates
 
-    other_parameter_updates = [get_internal_updates(m) for m in [dm,gm]]
+    other_parameter_updates = [get_internal_updates(m) for m in [d,g]]
     # those updates includes batch norm.
 
     print('other_parameter_updates for the models(mainly for batch norm):')
@@ -184,16 +184,15 @@ def gan(gm,dm):
     train_step = [update_wd, update_wg, other_parameter_updates]
     losses = [dloss,gloss]
 
-    learning_phase = tf.get_default_graph().get_tensor_by_name(
-        'keras_learning_phase:0')
+    learning_phase = K.learning_phase()
 
     def gan_feed(sess,batch_image,z_input):
         # actual GAN trainer
-        nonlocal train_step,losses,noise,real_image,learning_phase
+        nonlocal train_step,losses,noise,real_data,learning_phase
 
         res = sess.run([train_step,losses],feed_dict={
         noise:z_input,
-        real_image:batch_image,
+        real_data:batch_image,
         learning_phase:True,
         # Keras layers needs to know whether
         # this run is training or testring (you know, batch norm and dropout)

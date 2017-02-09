@@ -22,8 +22,8 @@ starry_night = cv2.imread('starry_night.jpg').astype('float32') / 255. - .5
 
 def feed_gen(output_size=[512,512]):
     # all the logic
-	
-	print('output size chosen:',output_size)
+    
+    print('output size chosen:',output_size)
 
     # create white_noise_image
     global white_noise_image

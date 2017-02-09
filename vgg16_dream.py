@@ -141,10 +141,14 @@ feed = feed_gen(output_size=[768,768])
 print('Ready to dream.')
 
 def r(ep=10):
+    import time
+    t = time.time()
     for i in range(ep):
+        t = time.time()
         print('ep',i)
         loss = feed()
-        print('loss:',loss)
+        t = time.time()-t
+        print('loss: {:6.6f}, {:6.4f}/run, {:6.4f}/s'.format(loss,t,1/t))
 
         if i%2==0:
             show()

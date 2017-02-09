@@ -89,59 +89,44 @@ def hole_strech(i,axis): # make holes in input data, eg [1,2] -> [1,0,2,0]
 	return Lambda(lambda x:makehole(x),output_shape=shaper)(i)
 
 def gen():
-	i = Input(shape=(time_steps,zed))
-	# shape: (batch, time_steps, zed)
-	inp = i
 
-	i = LSTM(32,
-		input_dim=zed,
-		input_length=time_steps,
-		return_sequences=True,
-		stateful=False,
-		consume_less='gpu')(i)
+    i = Input(shape=(time_steps,zed))
+    # shape: (batch, time_steps, zed)
+    inp = i
 
-	# shape: (batch, time_steps, 16)
-	# now try to deconv it into sample_length...
+    i = LSTM(32,
+        input_dim=zed,
+        input_length=time_steps,
+        return_sequences=True,
+        stateful=False,
+        consume_less='gpu')(i)
 
-	def ct1d(nb_filter,dim,std=1):
-		def j(i):
-			# input: batch, length, feature
-			# meant: batch, length * std, nb_filter
-			if std==1:
-				i = i
-			else:
-				i = hole_strech(i,axis=1)
-			i = Convolution1D(nb_filter, dim,
-				border_mode='same')(i)
-			return i
-		return j
+    # shape: (batch, time_steps, 16)
+    # now try to deconv it into sample_length...
 
-	# 1
-	
-	for k in reversed(range(10)): # 9..0
-		feat = min(2**k * 16,72)
-		
-		ident = i
-		
-		signal = ct1d(16,4,std=2)(i) # time_steps*2
-		gate =   ct1d(16,4,std=2)(i)
-		
-		signal = tanh(signal)
-		gate = sigmoid(gate)
-		
-		gated = merge([signal,gate],mode='mul')
-		
-		gated = ct1d(feat,1,std=1)(gated) #pointwise conv
-		
-		cident = ct1d(feat,1,std=2)(ident)
-		
-		summ = merge([cident,gated],mode='sum')
-		
-		i = summ
-		
-		
+    def ct1d(nb_filter,dim,std=1):
+        def j(i):
+            # input: batch, length, feature
+            # meant: batch, length * std, nb_filter
+            if std==1:
+                i = i
+            else:
+                i = hole_strech(i,axis=1)
+            i = Convolution1D(nb_filter, dim,
+                border_mode='same')(i)
+            return i
+        return j
 
-	# batch, time_steps * 1024, feat
+    # 1
+
+    for k in reversed(range(10)): # 9..0
+        feat = min(2**k * 16,72)
+
+        i = ct1d(feat,4,std=2)(i) # time_steps*2
+        i = bn(i)
+        i = relu(i)
+
+    # batch, time_steps * 1024, feat
    
 	i = ct1d(1, 1, std=1)(i) # shape: (batch, time_steps*1024, 1)
 	i = Activation('tanh')(i)
@@ -260,12 +245,15 @@ def r(ep=10000,noise_level=.01):
 		if i==ep-1 or i % 10==0: show()
 
 def show():
-	length = 1 # 32 * 32768 samples
-	snd = gm.predict(np.random.normal(loc=0,scale=1,size=(length,time_steps,zed)))
-	snd = snd.reshape((snd.shape[0]*snd.shape[1],))
-	print('snd shape:',snd.shape)
+    length = 1 # 32 * 32768 samples
+    psnd = gm.predict(np.random.normal(loc=0,scale=1,size=(length,time_steps,zed)))
+    snd = psnd.view()
+    snd.shape = (snd.shape[0]*snd.shape[1],)
+    variance = np.var(snd) * 2.
+    print('snd shape:',snd.shape,'var:',variance)
+    audible = np.clip(snd / variance, a_min=-1.,a_max=1.)
 
-	# following functions are prepared for 16bit signed audio
-	snd16bit = (snd*32000.).astype('int32')
-	play(snd16bit)
-	show_waterfall(snd16bit)
+    # following functions are prepared for 16bit signed audio
+    snd16bit = (audible*32700.).astype('int16')
+    play(snd16bit)
+    show_waterfall(snd16bit)

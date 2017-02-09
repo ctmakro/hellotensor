@@ -20,13 +20,15 @@ from keras.applications.vgg16 import VGG16
 
 starry_night = cv2.imread('starry_night.jpg').astype('float32') / 255. - .5
 
-def feed_gen(output_size=(512,512)):
+def feed_gen(output_size=[512,512]):
     # all the logic
+	
+	print('output size chosen:',output_size)
 
     # create white_noise_image
     global white_noise_image
     white_noise_image = tf.Variable(
-        tf.random_normal([1,512,512,3], stddev=0.1),
+        tf.random_normal([1]+output_size+[3], stddev=0.1),
         dtype=tf.float32,name='white_noise_image')
 
     # the model to descent the white noise image
@@ -114,7 +116,7 @@ def feed_gen(output_size=(512,512)):
     white_loss = tf.reduce_mean(white_style_losses)
 
     # minimize loss by gradient descent on white_noise_image
-    lr = 0.01
+    lr = 0.1
     adam = tf.train.AdamOptimizer(lr)
     print('Adam Optimizer lr = {}'.format(lr))
     descent_step = adam.minimize(white_loss,var_list=[white_noise_image])
@@ -134,7 +136,7 @@ def feed_gen(output_size=(512,512)):
     print('feed function generated.')
     return feed
 
-feed = feed_gen()
+feed = feed_gen(output_size=[768,768])
 
 print('Ready to dream.')
 

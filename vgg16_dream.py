@@ -21,7 +21,7 @@ from keras.applications.vgg19 import VGG19
 starry_night = cv2.imread('starry_night.jpg').astype('float32') / 255. - .5
 guangzhou = cv2.imread('guangzhou.jpg').astype('float32') / 255. - .5
 
-def feed_gen(output_size=[512,512]):
+def feed_gen(output_size=[512,512],use_lbfgs=True):
     # all the logic
     
     print('output size chosen:',output_size)
@@ -144,10 +144,14 @@ def feed_gen(output_size=[512,512]):
 
     # minimize loss by gradient descent on white_noise_image
     learning_rate = tf.Variable(0.01)
-    adam = tf.train.MomentumOptimizer(learning_rate,momentum=0.9)
-    adam = tf.train.AdamOptimizer(learning_rate)
-    print('connecting Adam optimizer...')
-    descent_step = adam.minimize(white_loss,var_list=[white_noise_image])
+    if not use_lbfgs:
+        adam = tf.train.AdamOptimizer(learning_rate)
+        print('connecting Adam optimizer...')
+        descent_step = adam.minimize(white_loss,var_list=[white_noise_image])
+    else:
+        lbfgs = tf.contrib.opt.ScipyOptimizerInterface(white_loss,
+            options={'maxiter':1000,'disp':2})
+        print('lbfgs optimizer selected...')
 
     # initialize the white_noise_image
     sess.run([tf.variables_initializer([white_noise_image])])
@@ -155,12 +159,25 @@ def feed_gen(output_size=[512,512]):
     print('white_noise_image initialized.')
 
     def feed(lr=.01,l2=.01):
-        nonlocal white_loss,descent_step,learning_rate,l2_strength
-        sess = K.get_session()
-        res = sess.run([descent_step,white_loss],
-        feed_dict={learning_rate:lr,l2_strength:l2})
-        loss = res[1]
-        return loss
+        nonlocal white_loss,descent_step,learning_rate,l2_strength,use_lbfgs
+
+        if not use_lbfgs:
+            sess = K.get_session()
+            res = sess.run([descent_step,white_loss],
+            feed_dict={learning_rate:lr,l2_strength:l2})
+            loss = res[1]
+            return loss
+        else:
+            nonlocal lbfgs
+            # lbfgs!
+            def cb(l):
+                print('loss_callback:',l)
+            sess = K.get_session()
+            lbfgs.minimize(sess,
+                fetches=[white_loss],
+                loss_callback=cb
+                )
+            return 0.1
 
     print('feed function generated.')
     return feed

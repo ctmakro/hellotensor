@@ -15,10 +15,11 @@ import numpy as np
 from keras.models import load_model
 import cv2
 
-print('importing VGG16...')
-from keras.applications.vgg16 import VGG16
+print('importing VGG19...')
+from keras.applications.vgg19 import VGG19
 
 starry_night = cv2.imread('starry_night.jpg').astype('float32') / 255. - .5
+guangzhou = cv2.imread('guangzhou.jpg').astype('float32') / 255. - .5
 
 def feed_gen(output_size=[512,512]):
     # all the logic
@@ -28,17 +29,17 @@ def feed_gen(output_size=[512,512]):
     # create white_noise_image
     global white_noise_image
     white_noise_image = tf.Variable(
-        tf.random_normal([1]+output_size+[3], stddev=0.1),
+        tf.random_normal([1]+output_size+[3], stddev=1e-3),
         dtype=tf.float32,name='white_noise_image')
 
     # the model to descent the white noise image
     global vggmodel_d
-    vggmodel_d = VGG16(include_top=False, weights='imagenet', input_tensor=white_noise_image)
+    vggmodel_d = VGG19(include_top=False, weights='imagenet', input_tensor=white_noise_image)
     vggmodel_d.summary()
 
-    style_reference_image = Input((None,None,3))
+    reference_image = Input((None,None,3))
     # the model to extract style representations
-    vggmodel_e = VGG16(include_top=False, weights='imagenet', input_tensor=style_reference_image)
+    vggmodel_e = VGG19(include_top=False, weights='imagenet', input_tensor=reference_image)
 
     print('VGG models created.')
 
@@ -51,8 +52,10 @@ def feed_gen(output_size=[512,512]):
     def get_representations(vggmodel):
 
         # activations of each layer, 5 layers for style capture, 1 layer for content capture.
-        style_activations = [vggmodel.get_layer('block'+str(i+1)+'_conv1').output for i in range(4)] # block_1..5_conv1
-        content_activation = vggmodel.get_layer('block4_conv2').output
+        layer_for_styles = list(filter(lambda x:'conv1' in x.name or 'block5_conv1' in x.name, vggmodel.layers))
+        style_activations = [i.output for i in layer_for_styles]
+        layer_for_content = ['block4_conv2','block3_conv2']
+        content_activations = [vggmodel.get_layer(l).output for l in layer_for_content]
 
         def gram_4d(i):
             # calculate gram matrix (inner product) of feature maps.
@@ -84,10 +87,10 @@ def feed_gen(output_size=[512,512]):
 
         gram_matrices = [gram_4d(i) for i in style_activations]
 
-        return gram_matrices
+        return gram_matrices,content_activations
 
-    # get the gram matrices for the style reference image
-    style_gram_matrices = get_representations(vggmodel_e)
+    # get the gram matrices of the style reference image
+    style_gram_matrices, content_activations = get_representations(vggmodel_e)
 
     # image shape manipulation: from HWC into NHWC
     sn = starry_night.view()
@@ -104,21 +107,46 @@ def feed_gen(output_size=[512,512]):
 
     print('reference style gram matrices loaded into memory as variables.')
 
+    # get content representation of the content image
+    gz = guangzhou.view()
+    gz.shape = (1,) + gz.shape
+    
+    reference_content_activations = sess.run([content_activations],
+        feed_dict={reference_image:gz})[0]
+    
+    print('reference content representations calculated.')
+    
+    # load content reps into memory
+    reference_content_activations = [into_variable(rca) for rca in reference_content_activations]
+    print('reference content activations loaded into memory as variables.')
+
     # calculate losses of white_noise_image's style wrt style references:
-    white_gram_matrices = get_representations(vggmodel_d)
+    white_gram_matrices, white_content_activations = get_representations(vggmodel_d)
 
     def square_loss(g1,g2): # difference between two gram matrix, used as style loss
         return tf.reduce_sum((g1-g2)**2)
 
     white_style_losses = [square_loss(white_gram_matrices[idx],style_references[idx])
         for idx, gs in enumerate(style_references)]
+        
+    # calculate losses of white_noise_image's content wrt content reference:
+    white_content_losses = [tf.reduce_mean((reference_content_activations[idx] - white_content_activations[idx])**2)
+        for idx, _ in enumerate(reference_content_activations)]
 
-    white_loss = tf.reduce_mean(white_style_losses)
+    white_loss = tf.reduce_mean(white_style_losses) + tf.reduce_mean(white_content_losses) * 1
+    
+    # add l2 regularizer on white_noise_image
+    l2r = tf.reduce_mean((white_noise_image)**2)
+    l2_strength = tf.Variable(0.01)
+    print('adding l2 regularizer...')
+    
+    white_loss = white_loss + l2r * l2_strength
 
     # minimize loss by gradient descent on white_noise_image
-    lr = 0.1
-    adam = tf.train.AdamOptimizer(lr)
-    print('Adam Optimizer lr = {}'.format(lr))
+    learning_rate = tf.Variable(0.01)
+    adam = tf.train.MomentumOptimizer(learning_rate,momentum=0.9)
+    adam = tf.train.AdamOptimizer(learning_rate)
+    print('connecting Adam optimizer...')
     descent_step = adam.minimize(white_loss,var_list=[white_noise_image])
 
     # initialize the white_noise_image
@@ -126,27 +154,28 @@ def feed_gen(output_size=[512,512]):
 
     print('white_noise_image initialized.')
 
-    def feed():
-        nonlocal white_loss,descent_step
+    def feed(lr=.01,l2=.01):
+        nonlocal white_loss,descent_step,learning_rate,l2_strength
         sess = K.get_session()
-        res = sess.run([descent_step,white_loss])
+        res = sess.run([descent_step,white_loss],
+        feed_dict={learning_rate:lr,l2_strength:l2})
         loss = res[1]
         return loss
 
     print('feed function generated.')
     return feed
 
-feed = feed_gen(output_size=[768,768])
+feed = feed_gen(output_size=list(guangzhou.shape[0:2]))
 
 print('Ready to dream.')
 
-def r(ep=10):
+def r(ep=10,lr=.01,l2=.01):
     import time
     t = time.time()
     for i in range(ep):
         t = time.time()
         print('ep',i)
-        loss = feed()
+        loss = feed(lr=lr,l2=l2)
         t = time.time()-t
         print('loss: {:6.6f}, {:6.4f}/run, {:6.4f}/s'.format(loss,t,1/t))
 
@@ -160,3 +189,10 @@ def show():
     image+=0.5
     cv2.imshow('result',image)
     cv2.waitKey(2)
+    
+    return image
+    
+def clear():
+    sess = K.get_session()
+    sess.run(tf.variables_initializer([white_noise_image]))
+    print('white noise image cleared.')

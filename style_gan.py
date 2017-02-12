@@ -18,6 +18,8 @@ import numpy as np
 
 import cv2
 
+K.set_session(tf.Session('grpc://192.168.1.103:16384'))
+
 batch_size = 32
 nb_classes = 10
 nb_epoch = 200
@@ -25,7 +27,10 @@ eps=1e-11
 
 zed = 100
 
-starry_night = cv2.imread('starry_night.jpg').astype('float32') / 255. - .5
+starry_night_full = cv2.imread('starry_night.jpg').astype('float32') / 255. - .5
+starry_night = np.zeros((256,256,3),dtype='float32')
+starry_night[:,:,:] = starry_night_full[0:256,0:256,:]
+
 guangzhou = cv2.imread('DSC_0896cs_s.jpg').astype('float32') / 255. - .5
 
 from keras_resnet import cake,neck,relu,bn
@@ -95,13 +100,13 @@ def gan(d):
     learning_rate = tf.Variable(0.01)
     optimizer = Adam(learning_rate,beta1=b1)
 
-	white_another_amp_pen = tf.reduce_mean(white_noise_image**2) * 1000
-	
+    white_another_amp_pen = tf.reduce_mean(white_noise_image**2) * 1000
+
     update_wd = optimizer.minimize(dloss,var_list=d.trainable_weights)
     update_wg = optimizer.minimize(gloss+white_another_amp_pen,var_list=[white_noise_image])
 
-	
-	
+
+
     def get_internal_updates(model):
         # get all internal update ops (like moving averages) of a model
         inbound_nodes = model.inbound_nodes
@@ -173,3 +178,8 @@ def show(save=False):
         cv2.imwrite('./log/'+show_prefix+'_'+str(show_counter)+'.jpg',image*255.)
         show_counter+=1
     return image
+
+def clear():
+    sess = K.get_session()
+    sess.run(tf.variables_initializer([white_noise_image]))
+    print('white noise image cleared.')

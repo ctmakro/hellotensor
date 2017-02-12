@@ -16,12 +16,12 @@ from keras.models import load_model
 import cv2
 
 print('importing VGG19...')
-from keras.applications.vgg19 import VGG19
+from keras.applications.vgg16 import VGG16 as VGG19
 
 starry_night = cv2.imread('starry_night.jpg').astype('float32') / 255. - .5
-guangzhou = cv2.imread('guangzhou.jpg').astype('float32') / 255. - .5
+guangzhou = cv2.imread('DSC_0896cs_s.jpg').astype('float32') / 255. - .5
 
-def feed_gen(output_size=[512,512],use_lbfgs=True):
+def feed_gen(output_size=[512,512],use_lbfgs=False):
     # all the logic
     
     print('output size chosen:',output_size)
@@ -29,7 +29,7 @@ def feed_gen(output_size=[512,512],use_lbfgs=True):
     # create white_noise_image
     global white_noise_image
     white_noise_image = tf.Variable(
-        tf.random_normal([1]+output_size+[3], stddev=1e-3),
+        tf.random_normal([1]+output_size+[3], stddev=1e-22),
         dtype=tf.float32,name='white_noise_image')
 
     # the model to descent the white noise image
@@ -52,9 +52,9 @@ def feed_gen(output_size=[512,512],use_lbfgs=True):
     def get_representations(vggmodel):
 
         # activations of each layer, 5 layers for style capture, 1 layer for content capture.
-        layer_for_styles = list(filter(lambda x:'conv1' in x.name or 'block5_conv1' in x.name, vggmodel.layers))
+        layer_for_styles = list(filter(lambda x:'conv' in x.name or 'block5_conv3' in x.name, vggmodel.layers))
         style_activations = [i.output for i in layer_for_styles]
-        layer_for_content = ['block4_conv2','block3_conv2']
+        layer_for_content = ['block5_conv2']
         content_activations = [vggmodel.get_layer(l).output for l in layer_for_content]
 
         def gram_4d(i):
@@ -133,20 +133,21 @@ def feed_gen(output_size=[512,512],use_lbfgs=True):
     white_content_losses = [tf.reduce_mean((reference_content_activations[idx] - white_content_activations[idx])**2)
         for idx, _ in enumerate(reference_content_activations)]
 
-    white_loss = tf.reduce_mean(white_style_losses) + tf.reduce_mean(white_content_losses) * 1
-    
-    # add l2 regularizer on white_noise_image
-    l2r = tf.reduce_mean((white_noise_image)**2)
-    l2_strength = tf.Variable(0.01)
-    print('adding l2 regularizer...')
-    
-    white_loss = white_loss + l2r * l2_strength
+    white_amplitude_penalty = tf.maximum(
+        white_noise_image - 0.5,0) + tf.maximum(
+        -0.5 - white_noise_image,0)
+        
+    white_another_amp_pen = tf.reduce_mean(white_noise_image**2)
+        
+    white_loss = tf.reduce_mean(white_style_losses) + tf.reduce_mean(white_content_losses) * .004
+    white_loss += tf.reduce_mean(white_amplitude_penalty**2)*10000 + white_another_amp_pen * .05
 
     # minimize loss by gradient descent on white_noise_image
     learning_rate = tf.Variable(0.01)
     if not use_lbfgs:
-        adam = tf.train.AdamOptimizer(learning_rate)
-        print('connecting Adam optimizer...')
+        adam = tf.train.AdamOptimizer(learning_rate,beta1=0.8, beta2=0.99)
+        #adam = tf.train.MomentumOptimizer(learning_rate,momentum=0.95)
+        print('connecting momentum sgd optimizer...')
         descent_step = adam.minimize(white_loss,var_list=[white_noise_image])
     else:
         lbfgs = tf.contrib.opt.ScipyOptimizerInterface(white_loss,
@@ -158,13 +159,13 @@ def feed_gen(output_size=[512,512],use_lbfgs=True):
 
     print('white_noise_image initialized.')
 
-    def feed(lr=.01,l2=.01):
-        nonlocal white_loss,descent_step,learning_rate,l2_strength,use_lbfgs
+    def feed(lr=.01):
+        nonlocal white_loss,descent_step,learning_rate,use_lbfgs
 
         if not use_lbfgs:
             sess = K.get_session()
             res = sess.run([descent_step,white_loss],
-            feed_dict={learning_rate:lr,l2_strength:l2})
+            feed_dict={learning_rate:lr})
             loss = res[1]
             return loss
         else:
@@ -186,28 +187,46 @@ feed = feed_gen(output_size=list(guangzhou.shape[0:2]))
 
 print('Ready to dream.')
 
-def r(ep=10,lr=.01,l2=.01):
+def r(ep=10,maxlr=.01):
     import time
     t = time.time()
     for i in range(ep):
         t = time.time()
         print('ep',i)
-        loss = feed(lr=lr,l2=l2)
+        lr = maxlr #* (math.cos((i%10)*math.pi/9)+1)/2 + 1e-9
+        print('lr:',lr)
+        loss = feed(lr=lr)
         t = time.time()-t
         print('loss: {:6.6f}, {:6.4f}/run, {:6.4f}/s'.format(loss,t,1/t))
 
-        if i%2==0:
-            show()
+        if i%5==0:
+            saveit = True if i%20==0 else False #every 100 ep
+            show(save=saveit)
 
-def show():
+show_counter = 0
+show_prefix = str(np.random.choice(1000))
+
+def show(save=False):
     sess = K.get_session()
     res = sess.run(vggmodel_d.input)
     image = res[0]
     image+=0.5
     cv2.imshow('result',image)
-    cv2.waitKey(2)
-    
+    cv2.waitKey(1)
+    cv2.waitKey(1)
+    if save:
+        global show_counter,show_prefix
+        cv2.imwrite('./log/'+show_prefix+'_'+str(show_counter)+'.jpg',image*255.)
+        show_counter+=1
     return image
+    
+def replace_original():
+    sess = K.get_session()
+    rg = guangzhou.view()
+    rg.shape = (1,) + guangzhou.shape
+    v = tf.Variable(rg)
+    sess.run(tf.variables_initializer([v]))
+    sess.run(tf.assign(white_noise_image,v))
     
 def clear():
     sess = K.get_session()

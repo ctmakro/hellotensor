@@ -71,7 +71,7 @@ def gen_neck(nip,nop,stride,h,w,bsize): # h and w are input height and width
 # per freshest resnet paper
 def neck(nip,nop,stride,disc=False):
     def unit(x):
-        nBottleneckPlane = int(nop / 4)
+        nBottleneckPlane = int(max(nip,nop) / 4)
         nbp = nBottleneckPlane
 
         if nip==nop and stride==1:

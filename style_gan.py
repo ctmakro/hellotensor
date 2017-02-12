@@ -28,7 +28,7 @@ zed = 100
 starry_night = cv2.imread('starry_night.jpg').astype('float32') / 255. - .5
 guangzhou = cv2.imread('DSC_0896cs_s.jpg').astype('float32') / 255. - .5
 
-from keras_resnet import cake,neck,relu
+from keras_resnet import cake,neck,relu,bn
 
 def dis():
     i = Input((None,None,3))
@@ -40,7 +40,7 @@ def dis():
     i = neck(16,32,2)(i)
     i = neck(32,32,1)(i)
     i = neck(32,32,1)(i)
-    i = neck(32,32,2)(i)
+    i = neck(32,64,2)(i)
     i = bn(i)
     i = relu(i)
     i = GlobalAveragePooling2D()(i)
@@ -82,7 +82,7 @@ def gan(d):
             return K.log(i+1e-11)
 
         # single side label smoothing: replace 1.0 with 0.9
-        dloss = - K.mean(log_eps(1-gscore) + .1 * log_eps(1-rscore) + .9 * log_eps(rscore))
+        dloss = - K.mean(log_eps(1-gscore) + .01 * log_eps(1-rscore) + .99 * log_eps(rscore))
         gloss = - K.mean(log_eps(gscore))
 
         return dloss,gloss
@@ -92,11 +92,16 @@ def gan(d):
     Adam = tf.train.AdamOptimizer
 
     lr,b1 = 1e-3,.9 # otherwise won't converge.
-    optimizer = Adam(lr,beta1=b1)
+    learning_rate = tf.Variable(0.01)
+    optimizer = Adam(learning_rate,beta1=b1)
 
+	white_another_amp_pen = tf.reduce_mean(white_noise_image**2) * 1000
+	
     update_wd = optimizer.minimize(dloss,var_list=d.trainable_weights)
-    update_wg = optimizer.minimize(gloss,var_list=[white_noise_image])
+    update_wg = optimizer.minimize(gloss+white_another_amp_pen,var_list=[white_noise_image])
 
+	
+	
     def get_internal_updates(model):
         # get all internal update ops (like moving averages) of a model
         inbound_nodes = model.inbound_nodes
@@ -117,12 +122,13 @@ def gan(d):
 
     learning_phase = K.learning_phase()
 
-    def gan_feed():
+    def gan_feed(lr=0.01):
         # actual GAN trainer
-        nonlocal train_step,losses,learning_phase
+        nonlocal train_step,losses,learning_phase,learning_rate
         sess = K.get_session()
         res = sess.run([train_step,losses],feed_dict={
         learning_phase:True,
+        learning_rate:lr
         # Keras layers needs to know whether
         # this run is training or testring (you know, batch norm and dropout)
         })
@@ -142,14 +148,14 @@ def r(ep=10,maxlr=.01):
         print('ep',i)
         lr = maxlr #* (math.cos((i%10)*math.pi/9)+1)/2 + 1e-9
         print('lr:',lr)
-        # loss = feed(lr=lr)
-        loss = feed()
+        loss = feed(lr=lr)
+        # loss = feed()
         t = time.time()-t
         print('dloss: {:6.6f}, gloss: {:6.6f}, {:6.4f}/run, {:6.4f}/s'.format(loss[0],loss[1],t,1/t))
 
-        # if i%5==0:
-        #     saveit = True if i%20==0 else False #every 100 ep
-        #     show(save=saveit)
+        if i%5==0:
+            saveit = True if i%20==0 else False #every 100 ep
+            show(save=False)
 
 show_counter = 0
 show_prefix = str(np.random.choice(1000))

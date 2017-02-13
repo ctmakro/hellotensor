@@ -23,6 +23,20 @@ def conv2d(nip,nop,dim,std=1,usebias=True):
             return c
     return conv
 
+class GRU:
+    def __init__(self, n_h, name):
+        self.count = 0
+        self.name=name
+        with tf.variable_scope(self.name):
+            self.cell = tf.nn.rnn_cell.GRUCell(num_units=n_h)
+    def __call__(self,i):
+        with tf.variable_scope(self.name,reuse=True if self.count!=0 else False):
+            outputs, states = tf.nn.dynamic_rnn(self.cell, inputs=i, dtype=tf.float32)
+        self.count+=1
+        return outputs
+    def get_variables(self):
+        return get_variables_of_scope('trainable_variables',self.name)
+
 def relu(i):
     # return tf.nn.relu6(i)
     return tf.nn.relu(i)
@@ -146,9 +160,10 @@ def resconv(i,nip,nop,std=1):
     return out
 
 def dense(nip,nop):
+    W = make_weight([nip,nop])
+    b = make_bias([nop])
     def dens(i):
-        W = make_weight([nip,nop])
-        b = make_bias([nop])
+        nonlocal W,b
         d = tf.matmul(i,W)+b
         return d
     return dens

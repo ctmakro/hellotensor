@@ -11,3 +11,4 @@ arch.png
 *.h5
 
 *.pyc
+canton/*

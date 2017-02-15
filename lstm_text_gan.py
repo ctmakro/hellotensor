@@ -113,8 +113,8 @@ def gen():
 
 
 def mymodel():
-    gru = GRU(128,'mGRU')
-    den = dense(128,64)
+    gru = GRU(256,'mGRU')
+    den = dense(256,64)
     den2 = dense(64,256)
     def call(i):
         nonlocal gru,den
@@ -231,7 +231,9 @@ def show2():
 
         res = predict(hot)[0]
         dist = softmax(res[-1])
+
         code = np.random.choice(256, p=dist)
+        # code = np.argmax(dist)
 
         #print(code)
         char = chr(code)

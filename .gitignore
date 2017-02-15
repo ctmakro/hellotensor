@@ -12,3 +12,4 @@ arch.png
 
 *.pyc
 canton/*
+canton/

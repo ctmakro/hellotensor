@@ -4,12 +4,13 @@ from keras.models import *
 from keras.layers import *
 from keras.optimizers import *
 from keras.utils.data_utils import get_file
-from keras import backend as K
+# from keras import backend as K
 import numpy as np
 import random
 import sys
 
 from tensorflow_boilerplate import *
+import canton as ct
 
 zed = 32
 time_steps = 1024
@@ -111,59 +112,83 @@ def gen():
 #     additional_d_weights=dgru.get_variables(),
 #     additional_g_weights=ggru.get_variables())
 
-
-def mymodel():
-    gru = GRU(256,'mGRU')
-    den = dense(256,64)
-    den2 = dense(64,256)
+def mymodel_builder():
+    can = ct.Can()
+    layers = [ct.GRU(256),ct.Dense(256,64),ct.Dense(64,256)]
+    can.incan(layers)
     def call(i):
-        nonlocal gru,den
-        i = gru(i)
-        # output shape (batch, time_steps, 128)
-        # i = tf.reshape(i[:,tf.shape(i)[1]-1,:],[-1,64])
-        ms,ls = tf.shape(i)[1],tf.shape(i)[2]
-        i = tf.reshape(i,[-1,ls])
-        i = den(i)
-        i = tf.tanh(i)
-        i = den2(i)
-        i = tf.reshape(i,[-1,ms,256])
-        # i = tf.sigmoid(i)
-        # i = den2(i)
-        # i = tf.nn.softmax(i)
-        # i = tf.nn.softmax(i)
+        i = layers[0](i)
+        # (batch, time_steps, 256)
+        shape = tf.shape(i)
+        b,t,d = shape[0],shape[1],shape[2]
+
+        i = tf.reshape(i,[-1,d])
+
+        i = layers[1](i)
+        i = layers[2](i)
+
+        i = tf.reshape(i,[-1,t,d])
         return i
+    can.set_function(call)
+    return can
 
-    # def longcall(i):
-    #     i = gru(i)
-    #     i = den(i)
-    #     return i
-    return call
+# def mymodel():
+#     gru = GRU(256,'mGRU')
+#     den = dense(256,64)
+#     den2 = dense(64,256)
+#     def call(i):
+#         nonlocal gru,den
+#         i = gru(i)
+#         # output shape (batch, time_steps, 128)
+#         # i = tf.reshape(i[:,tf.shape(i)[1]-1,:],[-1,64])
+#         ms,ls = tf.shape(i)[1],tf.shape(i)[2]
+#         i = tf.reshape(i,[-1,ls])
+#         i = den(i)
+#         i = tf.tanh(i)
+#         i = den2(i)
+#         i = tf.reshape(i,[-1,ms,256])
+#         # i = tf.sigmoid(i)
+#         # i = den2(i)
+#         # i = tf.nn.softmax(i)
+#         # i = tf.nn.softmax(i)
+#         return i
+#
+#     # def longcall(i):
+#     #     i = gru(i)
+#     #     i = den(i)
+#     #     return i
+#     return call
 
-mymodel_call = mymodel()
+mymodel = mymodel_builder()
 
 def feed_gen():
     x = tf.placeholder(tf.float32, shape=[None, None, corpus.shape[1]])
-    y = mymodel_call(x)
+    y = mymodel(x)
     gt = tf.placeholder(tf.float32, shape=[None, None, corpus.shape[1]])
     loss = categorical_cross_entropy(y,gt)
 
-    train_step = tf.train.AdamOptimizer(1e-3).minimize(loss)
+    train_step = tf.train.AdamOptimizer(1e-3).minimize(
+        loss,var_list=mymodel.get_weights())
 
     def feed(minibatch,labels):
         nonlocal train_step,loss,x,gt
-        sess = K.get_session()
+        sess = ct.get_session()
         res = sess.run([loss,train_step],feed_dict={x:minibatch,gt:labels})
         return res[0]
 
     def predict(minibatch):
         nonlocal y,x
-        sess = K.get_session()
+        sess = ct.get_session()
         res = sess.run([y],feed_dict={x:minibatch})
         return res[0]
 
     return feed,predict
 
 feed,predict = feed_gen()
+
+sess = ct.get_session()
+sess.run(tf.variables_initializer(mymodel.get_weights()))
+sess.run(tf.global_variables_initializer())
 
 def r(ep=100):
     length = len(corpus)

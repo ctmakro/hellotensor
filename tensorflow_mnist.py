@@ -1,53 +1,35 @@
 from __future__ import print_function
 
-from tensorflow_boilerplate import *
-from tensorflow_session import *
+# from tensorflow_boilerplate import *
+# from tensorflow_session import *
 import tensorflow as tf
 import numpy as np
+import canton as ct
+from canton import *
 
-class NetModel:
-    def __init__(self,modeler):
-        self.modeler = modeler
+def mycan_build():
+    c = Can()
+    c.add(Lambda(lambda i:tf.reshape(i,[-1,28,28,1])))
+    c.add(Conv2D(1,16,3))
 
-    def model_builder(self,name,reuse=False):
-        def model(inp):
-            print('building model...')
-            with tf.variable_scope(name,reuse=reuse):
-                out = self.modeler(inp)
-            print('model built.')
-            summary_scope(name)
-            return out
-        return model
+    c.add(ResConv(16,16))
+    c.add(ResConv(16,16))
+    c.add(ResConv(16,32,std=2))
 
-def resnet(inp):
-    i = inp
-    i = tf.reshape(i,[-1,28,28,1]) # reshape into 4d tensor
+    c.add(ResConv(32,32))
+    c.add(ResConv(32,32))
+    c.add(ResConv(32,64,std=2))
 
-    i = conv2d(1,16,3)(i)
+    c.add(ResConv(64,64))
+    c.add(ResConv(64,64))
+    c.add(ResConv(64,64,std=2))
 
-    i = resconv(i,16,16)
-    i = resconv(i,16,16)
-    i = resconv(i,16,16,std=2)
+    c.add(Act('relu'))
+    c.add(Conv2D(64,10,1))
 
-    i = resconv(i,16,16)
-    i = resconv(i,16,16)
-    i = resconv(i,16,32,std=2)
-
-    i = resconv(i,32,32)
-    i = resconv(i,32,32)
-    i = resconv(i,32,64,std=2)
-
-    i = bn(i)
-    i = relu(i)
-    i = conv2d(64,10,1)(i)
-
-    i = tf.reduce_mean(i,[1,2]) # 2d tensor (N, onehot)
-
-    return i
-
-netmod = NetModel(resnet)
-
-# f = make_function(x,y)
+    c.add(Lambda(lambda i:tf.reduce_mean(i,[1,2])))
+    c.chain()
+    return c
 
 def mnist_data():
     print('loading mnist...')
@@ -87,28 +69,38 @@ def mnist_data():
 
 xtrain,ytrain,xtest,ytest = mnist_data()
 
-def testmr():
+mycan = mycan_build()
+
+def feed_gen():
     x = tf.placeholder(tf.float32, shape=[None, 784])
+    y = mycan(x)
+    gt = tf.placeholder(tf.float32,shape=[None,10])
 
-    model = netmod.model_builder('mynet_testmr') # reuse params
-    y = model(x)
+    loss = ct.mean_softmax_cross_entropy(y,gt)
+    acc = ct.one_hot_accuracy(y,gt)
 
-    gt = tf.placeholder(tf.float32, shape=[None, 10])
+    optimizer = tf.train.AdamOptimizer(1e-3)
+    train_step = optimizer.minimize(loss,var_list=mycan.get_weights())
 
-    mr = ModelRunner(inputs=x,outputs=y,gt=gt)
-    mr.set_loss(categorical_cross_entropy(y,gt)) # loss(y,gt)
-    mr.set_optimizer(Adam(1e-3))
-    mr.set_acc(batch_accuracy(y,gt)) # optional. acc(y,gt)
+    def feed(xi,yi,train=True):
+        sess = ct.get_session()
+        if train:
+            res = sess.run([loss,acc,train_step],feed_dict={x:xi,gt:yi})
+        else:
+            res = sess.run([loss,acc],feed_dict={x:xi,gt:yi})
+        return res[0:2]
+    return feed
 
-    r = mr.get_epoch_runner(xtrain,ytrain,xtest,ytest)
-    r(2,50)
-# r = mr.defaultEpochRunner(xtrain,ytrain)
+feed = feed_gen()
 
-def testamr():
-    amr = AdvancedModelRunner()
-    amr.model = netmod.model_builder('mynet_testamr')
+ct.get_session().run(tf.global_variables_initializer())
 
-    amr.optimizer = Adam(1e-3)
-    r = amr.get_epoch_runner_preload(xtrain,ytrain)
-
-    r(2,50)
+def r(ep=10):
+    bs = 32
+    for i in range(ep):
+        print('ep',i)
+        for j in range(0,len(xtrain),bs):
+            loss,acc = feed(xtrain[j:j+bs],ytrain[j:j+bs])
+            print('loss:',loss,'acc:',acc)
+        loss,acc = feed(xtest,ytest,train=False)
+        print('test loss:',loss,'acc:',acc)

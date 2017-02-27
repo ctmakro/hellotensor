@@ -114,7 +114,7 @@ def gen():
 
 def mymodel_builder():
     can = ct.Can()
-    layers = [ct.GRU(256),ct.Dense(256,64),ct.Dense(64,256)]
+    layers = [ct.GRU(256,256),ct.Dense(256,64),ct.Dense(64,256)]
     can.incan(layers)
     def call(i):
         i = layers[0](i)
@@ -165,7 +165,7 @@ def feed_gen():
     x = tf.placeholder(tf.float32, shape=[None, None, corpus.shape[1]])
     y = mymodel(x)
     gt = tf.placeholder(tf.float32, shape=[None, None, corpus.shape[1]])
-    loss = categorical_cross_entropy(y,gt)
+    loss = ct.mean_softmax_cross_entropy(y,gt)
 
     train_step = tf.train.AdamOptimizer(1e-3).minimize(
         loss,var_list=mymodel.get_weights())

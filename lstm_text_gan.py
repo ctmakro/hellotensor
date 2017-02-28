@@ -1,16 +1,14 @@
 
 from __future__ import print_function
-from keras.models import *
-from keras.layers import *
-from keras.optimizers import *
 from keras.utils.data_utils import get_file
 # from keras import backend as K
 import numpy as np
 import random
 import sys
 
-from tensorflow_boilerplate import *
+# from tensorflow_boilerplate import *
 import canton as ct
+import tensorflow as tf
 
 zed = 32
 time_steps = 1024
@@ -62,56 +60,6 @@ def textdata():
 text,corpus = textdata()
 print('corpus loaded. corpus[0]:',corpus[0])
 
-def dis():
-    i = Input((time_steps,8),name='dis_input')
-    # input: time_steps chars, each 256 possibility
-    # (batch, time_steps, 256)
-    inp = i
-
-    # i = Convolution1D(128, 1, activation='tanh',name='dis_embed')(i)
-    # # # embed into vector of 4
-
-    gru = GRU(32,'DGRU')
-    i = Lambda(lambda i:gru(i))(i)
-
-    # output shape (batch, time_steps, 32)
-    i = Lambda(lambda i:tf.reshape(i[:,time_steps-1,:],[-1,32]))(i)
-    i = Dense(1,activation='sigmoid')(i)
-
-    model = Model(input=inp,output=i)
-    # model.trainable_weights += gru.get_variables()
-    return model,gru
-
-def gen():
-    i = Input((time_steps,zed),name='gen_input') # some random vector
-    inp = i
-
-    gru = GRU(40,'GGRU')
-    i = Lambda(lambda i:gru(i))(i)
-
-    # output shape (batch, time_steps, 32)
-    # i = Convolution1D(32,1,activation='sigmoid')(i)
-    i = Convolution1D(8,1,activation='sigmoid')(i)
-    # shape: (batch, time_steps, 256)
-    model = Model(input=inp,output=i)
-    # model.trainable_weights += gru.get_variables()
-    return model,gru
-
-# dm,dgru = dis()
-# dm.summary()
-# gm,ggru = gen()
-# gm.summary()
-
-# pm,pgru = pred()
-# gm.compile(loss='mse',optimizer='sgd')
-# dm.compile(loss='mse',optimizer='sgd')
-
-# from gan_common import gan
-#
-# gan_feed = gan(gm,dm,
-#     additional_d_weights=dgru.get_variables(),
-#     additional_g_weights=ggru.get_variables())
-
 def mymodel_builder():
     can = ct.Can()
     layers = [ct.GRU(256,256),ct.Dense(256,64),ct.Dense(64,256)]
@@ -132,33 +80,6 @@ def mymodel_builder():
     can.set_function(call)
     return can
 
-# def mymodel():
-#     gru = GRU(256,'mGRU')
-#     den = dense(256,64)
-#     den2 = dense(64,256)
-#     def call(i):
-#         nonlocal gru,den
-#         i = gru(i)
-#         # output shape (batch, time_steps, 128)
-#         # i = tf.reshape(i[:,tf.shape(i)[1]-1,:],[-1,64])
-#         ms,ls = tf.shape(i)[1],tf.shape(i)[2]
-#         i = tf.reshape(i,[-1,ls])
-#         i = den(i)
-#         i = tf.tanh(i)
-#         i = den2(i)
-#         i = tf.reshape(i,[-1,ms,256])
-#         # i = tf.sigmoid(i)
-#         # i = den2(i)
-#         # i = tf.nn.softmax(i)
-#         # i = tf.nn.softmax(i)
-#         return i
-#
-#     # def longcall(i):
-#     #     i = gru(i)
-#     #     i = den(i)
-#     #     return i
-#     return call
-
 mymodel = mymodel_builder()
 
 def feed_gen():
@@ -177,10 +98,7 @@ def feed_gen():
         return res[0]
 
     def predict(minibatch):
-        nonlocal y,x
-        sess = ct.get_session()
-        res = sess.run([y],feed_dict={x:minibatch})
-        return res[0]
+        return mymodel.infer(minibatch)
 
     return feed,predict
 
@@ -210,39 +128,9 @@ def r(ep=100):
 
         if i%100==0 : pass#show2()
 
-def ro(ep=1000):
-    sess = K.get_session()
-    length = len(corpus)
-    batch_size = 128
-    mbl = time_steps * batch_size
-    sr = length - mbl
-
-    for i in range(ep):
-        print('---------------------------')
-        print('iter',i)
-
-        # sample from corpus
-        j = np.random.choice(sr)
-
-        minibatch = corpus[j:j+mbl]
-        minibatch.shape = [batch_size, time_steps, corpus.shape[1]]
-
-        z_input = np.random.normal(loc=0.,scale=1.,
-            size=(batch_size,time_steps,zed))
-
-        # dm.reset_states()
-        # gm.reset_states()
-
-        # train for one step
-        losses = gan_feed(sess,minibatch,z_input)
-        print('dloss:{:6.4f} gloss:{:6.4f}'.format(losses[0],losses[1]))
-
-        if i==ep-1 or i % 10==0: show()
-
 def softmax(x):
     scoreMatExp = np.exp(np.asarray(x))
     return scoreMatExp / scoreMatExp.sum(0)
-
 
 import sys
 def show2():
@@ -267,12 +155,3 @@ def show2():
         sys.stdout.write( '%s' % char )
         sys.stdout.flush()
     print('')
-
-def show():
-    z_input = np.random.normal(loc=0.,scale=1.,
-        size=(1,time_steps,zed))
-    res = gm.predict(z_input)[0]
-    sentence = ''
-    for i in range(len(res)):
-        sentence += chr(eight2char(res[i]))
-    print(sentence)

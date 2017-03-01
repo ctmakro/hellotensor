@@ -32,6 +32,11 @@ def one_hot(tensor,dims):
         onehot[...,i] = tensor[...] == i
     return onehot
 
+def one_hot_int(integer, dims):
+    h = np.zeros((1,dims),dtype='float32')
+    h[:,integer] = 1
+    return h
+
 def to_asc(text):
     asc = np.zeros((len(text),),dtype='uint8')
     # convert into ascii
@@ -62,21 +67,23 @@ print('corpus loaded. corpus[0]:',corpus[0])
 
 def mymodel_builder():
     can = ct.Can()
-    layers = [ct.GRU(256,256),ct.Dense(256,64),ct.Dense(64,256)]
-    can.incan(layers)
-    def call(i):
-        i = layers[0](i)
-        # (batch, time_steps, 256)
+    gru,d1,d2 = ct.GRU(256,256),ct.TimeDistributedDense(256,64),ct.TimeDistributedDense(64,256)
+    can.incan([gru,d1,d2])
+    def call(i,starting_state=None):
+        i = gru(i,starting_state=starting_state)
+        # (batch, time_steps, 512)
         shape = tf.shape(i)
         b,t,d = shape[0],shape[1],shape[2]
+        ending_state = i[:,t-1,:]
 
-        i = tf.reshape(i,[-1,d])
+        i = d1(i)
+        i = tf.nn.elu(i)
+        i = d2(i)
 
-        i = layers[1](i)
-        i = layers[2](i)
-
-        i = tf.reshape(i,[-1,t,d])
-        return i
+        if starting_state is None:
+            return i
+        else:
+            return i, ending_state
     can.set_function(call)
     return can
 
@@ -97,8 +104,14 @@ def feed_gen():
         res = sess.run([loss,train_step],feed_dict={x:minibatch,gt:labels})
         return res[0]
 
-    def predict(minibatch):
-        return mymodel.infer(minibatch)
+    starting_state = tf.placeholder(tf.float32, shape=[None, None])
+    stateful_y, ending_state = mymodel(x,starting_state=starting_state)
+
+    def predict(st,i):
+        # stateful, to enable fast generation.
+        sess = ct.get_session()
+        res = sess.run([stateful_y,ending_state],feed_dict={x:i,starting_state:st})
+        return res
 
     return feed,predict
 
@@ -133,25 +146,32 @@ def softmax(x):
     return scoreMatExp / scoreMatExp.sum(0)
 
 import sys
-def show2():
-    t = 'the'
-    for i in range(400):
+def show2(length=400):
+    t = 97
+    starting_state = np.zeros((1,256),dtype='float32')
+    for i in range(length):
         # convert into ascii
-        asc = to_asc(t[-time_steps:])
-        hot = one_hot(asc,256)
+        # asc = to_asc(t[-time_steps:])
+        asc = t
+        hot = one_hot_int(asc,256)
         hot.shape = (1,)+hot.shape
         #print(hot.shape)
 
-        res = predict(hot)[0]
-        dist = softmax(res[-1])
+        [stateful_y,ending_state] = predict(starting_state,hot)
+        starting_state = ending_state
 
+        res = stateful_y[0,0] # choose the last dimension
+        dist = softmax(res) # do the softmath
+        dist = (dist - np.mean(dist) > 0) * dist # pick the greater ones
+        dist = dist / np.sum(dist) # normalize sum to 1
         code = np.random.choice(256, p=dist)
         # code = np.argmax(dist)
 
         #print(code)
         char = chr(code)
-        t+=char
+        t=code
 
         sys.stdout.write( '%s' % char )
-        sys.stdout.flush()
+        if i%10==0 : sys.stdout.flush()
+    sys.stdout.flush()
     print('')

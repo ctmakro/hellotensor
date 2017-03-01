@@ -65,11 +65,11 @@ def gen_gen():
         return dc
 
     ngf = 32
-    c.add(deconv(zed,ngf*8,upscale=2)) #4
+    c.add(deconv(zed,ngf*8,upscale=4)) #4
     c.add(deconv(ngf*8,ngf*4))
     c.add(deconv(ngf*4,ngf*2))
     c.add(deconv(ngf*2,ngf*1)) #32
-    c.add(deconv(ngf*1,3,tail=False,upscale=2))
+    c.add(deconv(ngf*1,3,tail=False,upscale=1))
     c.add(Act('tanh'))
     c.chain()
     return c
@@ -90,9 +90,9 @@ def dis_gen():
     cd = Can()
     cd.set_function(concat_diff)
 
-    def conv(nip,nop,usebn=True):
+    def conv(nip,nop,usebn=True,std=2):
         cv = Can()
-        cv.add(Conv2D(nip,nop,k=4,std=2,usebias=False))
+        cv.add(Conv2D(nip,nop,k=4,std=std,usebias=False))
         if usebn:
             cv.add(BatchNorm(nop))
         cv.add(Act('elu'))
@@ -141,7 +141,7 @@ def gan(g,d):
 
     Adam = tf.train.AdamOptimizer
 
-    lr,b1 = 2e-4,.2 # otherwise won't converge.
+    lr,b1 = 1e-4,.2 # otherwise won't converge.
     optimizer = Adam(lr,beta1=b1)
 
     update_wd = optimizer.minimize(dloss,var_list=d.get_weights())
@@ -192,7 +192,7 @@ def r(ep=10000):
         losses = gan_feed(sess,minibatch)
         print('dloss:{:6.4f} gloss:{:6.4f}'.format(losses[0],losses[1]))
 
-        if i==ep-1 or i % 10==0: show()
+        if i==ep-1 or i % 20==0: show()
 
 def autoscaler(img):
     limit = 400.
@@ -233,7 +233,7 @@ def flatten_multiple_image_into_image(arr):
     return img,imgscale
 
 def show(save=False):
-    i = np.random.normal(loc=0.,scale=1.,size=(batch_size,zed))
+    i = np.random.normal(loc=0.,scale=1.,size=(64,zed))
     gened = gm.infer(i)
 
     gened *= 0.5

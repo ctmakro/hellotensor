@@ -64,7 +64,7 @@ def gen_gen():
         dc.chain()
         return dc
 
-    ngf = 24
+    ngf = 32
     c.add(deconv(zed,ngf*8,upscale=2)) #4
     c.add(deconv(ngf*8,ngf*4))
     c.add(deconv(ngf*4,ngf*2))
@@ -100,7 +100,7 @@ def dis_gen():
         cv.chain()
         return cv
 
-    ndf = 24
+    ndf = 40
     c.add(conv(3,ndf*1,usebn=False)) # 16
     c.add(conv(ndf*1+1,ndf*2))
     c.add(conv(ndf*2+1,ndf*4))
@@ -125,7 +125,7 @@ def gan(g,d):
     # this is the fastest way to train a GAN in TensorFlow
     # two models are updated simutaneously in one pass
 
-    noise = ct.ph([zed])
+    noise = tf.random_normal(mean=0.,stddev=1.,shape=[batch_size, zed])
     real_data = ct.ph([None,None,3])
 
     generated = g(noise)
@@ -150,12 +150,12 @@ def gan(g,d):
     train_step = [update_wd, update_wg]
     losses = [dloss,gloss]
 
-    def gan_feed(sess,batch_image,z_input):
+
+    def gan_feed(sess,batch_image):
         # actual GAN training function
         nonlocal train_step,losses,noise,real_data
 
         res = sess.run([train_step,losses],feed_dict={
-        noise:z_input,
         real_data:batch_image,
         })
 
@@ -169,7 +169,8 @@ gan_feed = gan(gm,dm)
 ct.get_session().run(tf.global_variables_initializer())
 print('Ready. enter r() to train')
 
-def r(ep=10000,noise_level=.01):
+noise_level=.1
+def r(ep=10000):
     sess = ct.get_session()
 
     np.random.shuffle(xt)
@@ -177,6 +178,7 @@ def r(ep=10000,noise_level=.01):
     length = len(shuffled_cifar)
 
     for i in range(ep):
+        global noise_level
         noise_level *= 0.99
         print('---------------------------')
         print('iter',i,'noise',noise_level)
@@ -186,10 +188,8 @@ def r(ep=10000,noise_level=.01):
         minibatch = shuffled_cifar[j*batch_size:(j+1)*batch_size]
         minibatch += np.random.normal(loc=0.,scale=noise_level,size=minibatch.shape)
 
-        z_input = np.random.normal(loc=0.,scale=1.,size=(batch_size,zed))
-
         # train for one step
-        losses = gan_feed(sess,minibatch,z_input)
+        losses = gan_feed(sess,minibatch)
         print('dloss:{:6.4f} gloss:{:6.4f}'.format(losses[0],losses[1]))
 
         if i==ep-1 or i % 10==0: show()

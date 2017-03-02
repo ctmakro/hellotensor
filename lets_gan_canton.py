@@ -100,7 +100,7 @@ def dis_gen():
         cv.chain()
         return cv
 
-    ndf = 40
+    ndf = 32
     c.add(conv(3,ndf*1,usebn=False)) # 16
     c.add(conv(ndf*1+1,ndf*2))
     c.add(conv(ndf*2+1,ndf*4))
@@ -131,15 +131,8 @@ def gan(g,d):
     generated = g(noise)
     gscore = d(generated)
     rscore = d(real_data)
-
-    def log_eps(i):
-        return tf.log(i+1e-13)
-
-    # single side label smoothing: replace 1.0 with 0.95
-    #dloss = - tf.reduce_mean(log_eps(1-gscore) + .1 * log_eps(1-rscore) + .95 * log_eps(rscore))
-    #gloss = - tf.reduce_mean(log_eps(gscore))
     
-    dloss = tf.reduce_mean((gscore-0)**2 + (rscore-1)**2)
+    dloss = tf.reduce_mean((gscore-0)**2 + (rscore-.9)**2)
     gloss = tf.reduce_mean((gscore-1)**2)
 
     Adam = tf.train.AdamOptimizer

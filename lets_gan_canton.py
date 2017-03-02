@@ -95,7 +95,7 @@ def dis_gen():
         cv.add(Conv2D(nip,nop,k=4,std=std,usebias=False))
         if usebn:
             cv.add(BatchNorm(nop))
-        cv.add(Act('elu'))
+        cv.add(Act('lrelu'))
         cv.add(cd)
         cv.chain()
         return cv
@@ -108,7 +108,6 @@ def dis_gen():
 
     c.add(Conv2D(ndf*8+1,1,k=2,padding='VALID'))
     c.add(Reshape([1]))
-    #c.add(Act('sigmoid'))
     c.chain()
     return c
 
@@ -132,12 +131,12 @@ def gan(g,d):
     gscore = d(generated)
     rscore = d(real_data)
     
-    dloss = tf.reduce_mean((gscore-0)**2 + (rscore-.9)**2)
+    dloss = tf.reduce_mean((gscore-0)**2 + (rscore-1)**2)
     gloss = tf.reduce_mean((gscore-1)**2)
 
     Adam = tf.train.AdamOptimizer
 
-    lr,b1 = 2e-4,.2 # otherwise won't converge.
+    lr,b1 = 1e-4,.2 # otherwise won't converge.
     optimizer = Adam(lr,beta1=b1)
 
     update_wd = optimizer.minimize(dloss,var_list=d.get_weights())
@@ -229,7 +228,7 @@ def flatten_multiple_image_into_image(arr):
     return img,imgscale
 
 def show(save=False):
-    i = np.random.normal(loc=0.,scale=1.,size=(64,zed))
+    i = np.random.normal(loc=0.,scale=1.,size=(32,zed))
     gened = gm.infer(i)
 
     gened *= 0.5

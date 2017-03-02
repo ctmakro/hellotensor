@@ -108,7 +108,7 @@ def dis_gen():
 
     c.add(Conv2D(ndf*8+1,1,k=2,padding='VALID'))
     c.add(Reshape([1]))
-    c.add(Act('sigmoid'))
+    #c.add(Act('sigmoid'))
     c.chain()
     return c
 
@@ -136,12 +136,15 @@ def gan(g,d):
         return tf.log(i+1e-13)
 
     # single side label smoothing: replace 1.0 with 0.95
-    dloss = - tf.reduce_mean(log_eps(1-gscore) + .1 * log_eps(1-rscore) + .95 * log_eps(rscore))
-    gloss = - tf.reduce_mean(log_eps(gscore))
+    #dloss = - tf.reduce_mean(log_eps(1-gscore) + .1 * log_eps(1-rscore) + .95 * log_eps(rscore))
+    #gloss = - tf.reduce_mean(log_eps(gscore))
+    
+    dloss = tf.reduce_mean((gscore-0)**2 + (rscore-1)**2)
+    gloss = tf.reduce_mean((gscore-1)**2)
 
     Adam = tf.train.AdamOptimizer
 
-    lr,b1 = 1e-4,.2 # otherwise won't converge.
+    lr,b1 = 2e-4,.2 # otherwise won't converge.
     optimizer = Adam(lr,beta1=b1)
 
     update_wd = optimizer.minimize(dloss,var_list=d.get_weights())

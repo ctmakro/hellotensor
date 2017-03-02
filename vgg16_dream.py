@@ -8,6 +8,7 @@ import math
 import tensorflow as tf
 import numpy as np
 from keras.models import load_model
+from keras import backend as K
 import cv2
 
 import canton as ct
@@ -21,31 +22,32 @@ guangzhou = cv2.imread('DSC_0896cs_s.jpg').astype('float32') / 255. - .5
 
 def feed_gen(output_size=[512,512]):
     # all the logic
-
-    print('output size chosen:',output_size)
-
-    # create white_noise_image
-    global white_noise_image
-    white_noise_image = tf.Variable(
-        tf.random_normal([1]+output_size+[3], stddev=1e-12),
-        dtype=tf.float32,name='white_noise_image')
-
-    # the model to descent the white noise image
-    global vggmodel_d
-    vggmodel_d = VGG19(include_top=False, weights='imagenet', input_tensor=white_noise_image)
-    vggmodel_d.summary()
-
-    reference_image = ct.ph([None,None,3])
-    # the model to extract style representations
-    vggmodel_e = VGG19(include_top=False, weights='imagenet', input_tensor=reference_image)
-
-    print('VGG models created.')
-
+    ct.set_session(K.get_session()) # because keras load model variables into his own session, so we have to use it
     def into_variable(value):
         v = tf.Variable(initial_value=value)
         sess = ct.get_session()
         sess.run([tf.variables_initializer([v])])
         return v
+        
+    print('output size chosen:',output_size)
+
+    # create white_noise_image
+    global white_noise_image
+    white_noise_image = into_variable(
+        tf.random_normal([1]+output_size+[3], stddev=1e-3))
+    print('white_noise_image initialized.')
+    
+    # the model to descent the white noise image
+    global vggmodel_d,vggmodel_e
+    vggmodel_d = VGG19(include_top=False, weights='imagenet', input_tensor=white_noise_image)
+    vggmodel_d.summary()
+
+    reference_image =ct.ph([None,None,3])
+    # the model to extract style representations
+    vggmodel_e = VGG19(include_top=False, weights='imagenet', input_tensor=reference_image)
+    #vggmodel_e.summary()
+
+    print('VGG models created.')
 
     def get_representations(vggmodel):
 
@@ -95,7 +97,6 @@ def feed_gen(output_size=[512,512]):
     sn.shape = (1,) + sn.shape
 
     sess = ct.get_session()
-    sess.run(tf.global_variables_initializer())
     gram_ref = sess.run([style_gram_matrices],
         feed_dict={reference_image:sn})[0]
 
@@ -136,32 +137,31 @@ def feed_gen(output_size=[512,512]):
         p = tf.maximum(
             white_noise_image - ceiling,0) + tf.maximum(
             floor - white_noise_image,0)
-        return tf.reduce_mean(p)
+        return p
 
     def proportional_loss(lis): # similar to reduce mean, adds penalty if imbalance.
         mean_loss = tf.reduce_mean(lis)
-        pro_loss = tf.reduce_mean([(l - mean_loss)**2 for l in lis])
+        pro_loss = tf.reduce_mean([abs(l - mean_loss) for l in lis])
         return mean_loss + pro_loss * 5
 
     white_amplitude_penalty = amplitude_penalty(white_noise_image)
 
-    white_loss = proportional_loss([proportional_loss(white_style_losses) , tf.reduce_mean(white_content_losses) * .004])
+    white_loss = proportional_loss([proportional_loss(white_style_losses) , tf.reduce_mean(white_content_losses) * .01])
 
     white_loss += tf.reduce_mean(white_amplitude_penalty**2)*10000
 
     # minimize loss by gradient descent on white_noise_image
     learning_rate = tf.Variable(0.01)
 
+    #adam = tf.train.AdamOptimizer(learning_rate)
     adam = tf.train.AdamOptimizer(learning_rate)
-    #adam = tf.train.MomentumOptimizer(learning_rate,momentum=0.95)
     print('connecting momentum sgd optimizer...')
     descent_step = adam.minimize(white_loss,var_list=[white_noise_image])
+    slots = [adam.get_slot(white_noise_image,name) for name in adam.get_slot_names()]
 
-    # initialize the white_noise_image
-    # sess.run([tf.variables_initializer([white_noise_image])])
-    sess.run(tf.global_variables_initializer())
+    # initialize the white_noise_image and optimizer slots.
+    sess.run([tf.variables_initializer([white_noise_image]+slots+list(adam._get_beta_accumulators()))])
 
-    print('white_noise_image initialized.')
 
     def feed(lr=.01):
         nonlocal white_loss,descent_step,learning_rate

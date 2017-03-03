@@ -5,26 +5,24 @@ from keras.utils.data_utils import get_file
 import numpy as np
 import random
 import sys
-
-# from tensorflow_boilerplate import *
 import canton as ct
 import tensorflow as tf
 
 zed = 32
-time_steps = 1024
+time_steps = 16
 
-def char2eight(n):
-    binary = "{0:b}".format(n)
-    rep = np.zeros((8,),dtype='float32')
-    for i in range(len(binary)): # 0..2
-        rep[i+8-len(binary)] = 1 if binary[i] == '1' else 0
-    return rep
-
-def eight2char(e):
-    out = 0
-    for i in range(len(e)):
-        out += (1 if e[7-i]>0.5 else 0) * 2**i
-    return int(out)
+# def char2eight(n):
+#     binary = "{0:b}".format(n)
+#     rep = np.zeros((8,),dtype='float32')
+#     for i in range(len(binary)): # 0..2
+#         rep[i+8-len(binary)] = 1 if binary[i] == '1' else 0
+#     return rep
+#
+# def eight2char(e):
+#     out = 0
+#     for i in range(len(e)):
+#         out += (1 if e[7-i]>0.5 else 0) * 2**i
+#     return int(out)
 
 def one_hot(tensor,dims):
     onehot = np.zeros((len(tensor),dims),dtype='float32')
@@ -52,17 +50,10 @@ def textdata():
 
     # convert into ascii
     asc = to_asc(text)
-
-    # convert into 8dim
-    # for i in range(length):
-    #     onehot[i] = char2eight(asc[i])
-
-    # convert into onehot
     onehot = one_hot(asc,256)
-
     return text,onehot
 
-text,corpus = textdata()
+text, corpus = textdata() # the string and the one_hot encoded
 print('corpus loaded. corpus[0]:',corpus[0])
 
 def mymodel_builder():
@@ -74,10 +65,11 @@ def mymodel_builder():
         # (batch, time_steps, 512)
         shape = tf.shape(i)
         b,t,d = shape[0],shape[1],shape[2]
+
         ending_state = i[:,t-1,:]
 
         i = d1(i)
-        i = tf.nn.elu(i)
+        i = ct.Act('elu')(i)
         i = d2(i)
         i = ct.Act('softmax')(i)
 
@@ -94,9 +86,9 @@ def feed_gen():
     input_text = tf.placeholder(tf.float32,
         shape=[None, None, corpus.shape[1]]) # [batch, timesteps, 256]
 
-    xhead = input_text[:,:-1] # head
-    gt = input_text[:,1:] # tail
-    y = mymodel(xhead)
+    xhead = input_text[:,:-1] # [batch, 0:timesteps-1, 256]
+    gt = input_text[:,1:] # [batch, 1:timesteps, 256]
+    y = mymodel(xhead) # [batch, 1:timesteps, 256]
 
     loss = ct.cross_entropy_loss(y,gt)
 
@@ -150,14 +142,11 @@ def softmax(x):
 
 import sys
 def show2(length=400):
-    t = 97
+    code = 97 # last character generated
     starting_state = np.zeros((1,256),dtype='float32')
     for i in range(length):
-        # convert into ascii
-        # asc = to_asc(t[-time_steps:])
-        asc = t
-        hot = one_hot_int(asc,256)
-        hot.shape = (1,)+hot.shape
+        hot = one_hot_int(code,256)
+        hot.shape = (1,) + hot.shape
         #print(hot.shape)
 
         [stateful_y,ending_state] = predict(starting_state,hot)
@@ -166,13 +155,10 @@ def show2(length=400):
         res = stateful_y[0,0] # choose the last dimension
         dist = res # softmax(res) # do the softmath
         code = np.random.choice(256, p=dist)
-        # code = np.argmax(dist)
 
-        #print(code)
         char = chr(code)
-        t=code
-
         sys.stdout.write( '%s' % char )
-        if i%10==0 : sys.stdout.flush()
+        if i%10==0:
+            sys.stdout.flush()
     sys.stdout.flush()
     print('')

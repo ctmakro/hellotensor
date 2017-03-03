@@ -52,7 +52,6 @@ xt,yt,xv,yv = cifar()
 
 def gen_gen():
     c = Can()
-    c.add(Reshape([1,1,zed]))
 
     def deconv(nip,nop,tail=True,upscale=2):
         dc = Can()
@@ -67,7 +66,13 @@ def gen_gen():
     ngf = 32
     c.add(deconv(zed,ngf*8,upscale=4)) #4
     c.add(deconv(ngf*8,ngf*4))
+    
+    #c.add(deconv(ngf*4,ngf*4,upscale=1))
+    
     c.add(deconv(ngf*4,ngf*2))
+    
+    #c.add(deconv(ngf*2,ngf*2,upscale=1))
+    
     c.add(deconv(ngf*2,ngf*1)) #32
     c.add(deconv(ngf*1,3,tail=False,upscale=1))
     c.add(Act('tanh'))
@@ -87,8 +92,25 @@ def dis_gen():
 
         out = tf.concat([x,avgl1], axis=-1) # shape [N H W C+1]
         return out
+        
+    def batch_disc(i):
+        #assume i shape [N H W C]
+        s = tf.shape(i)
+        NHWC1 = tf.expand_dims(i,4)
+        AHWCN = tf.expand_dims(tf.transpose(i,[1,2,3,0]),0)
+        diffs = NHWC1 - AHWCN # [N H W C N]
+        abs_diffs = tf.abs(diffs)
+        # shape [N H W C N]
+        feat = tf.reduce_mean(tf.exp(-abs_diffs), [3,4])#[N H W]
+        feat = tf.expand_dims(feat,3)
+        # shape [N H W 1]
+        out = tf.concat([i, feat],axis=-1) # [N H W C+1]
+        return out
+        
+        #http://blog.aylien.com/introduction-generative-adversarial-networks-code-tensorflow/
+    
     cd = Can()
-    cd.set_function(concat_diff)
+    cd.set_function(batch_disc)
 
     def conv(nip,nop,usebn=True,std=2):
         cv = Can()
@@ -105,9 +127,9 @@ def dis_gen():
     c.add(conv(ndf*1+1,ndf*2))
     c.add(conv(ndf*2+1,ndf*4))
     c.add(conv(ndf*4+1,ndf*8)) # 2
-
     c.add(Conv2D(ndf*8+1,1,k=2,padding='VALID'))
     c.add(Reshape([1]))
+    c.add(Act('sigmoid'))
     c.chain()
     return c
 
@@ -124,21 +146,38 @@ def gan(g,d):
     # this is the fastest way to train a GAN in TensorFlow
     # two models are updated simutaneously in one pass
 
-    noise = tf.random_normal(mean=0.,stddev=1.,shape=[batch_size, zed])
+    noise = tf.random_normal(mean=0.,stddev=1.,shape=[batch_size,1,1,zed])
     real_data = ct.ph([None,None,3])
+    inl = tf.Variable(1e-11)
+    
+    def noisy(i):
+        return i + tf.random_normal(mean=0,stddev=inl,shape=tf.shape(i))
 
     generated = g(noise)
-    gscore = d(generated)
-    rscore = d(real_data)
     
-    dloss = tf.reduce_mean((gscore-0)**2 + (rscore-1)**2)
-    gloss = tf.reduce_mean((gscore-1)**2)
+    gscore = d(noisy(generated))
+    rscore = d(noisy(real_data))
+    
+    def log_eps(i):
+        return tf.reduce_mean(tf.log(i+1e-8))
+
+    # single side label smoothing: replace 1.0 with 0.9
+    dloss = - (log_eps(1-gscore) + .1 * log_eps(1-rscore)+ .9*log_eps(rscore))
+    gloss = - log_eps(gscore)
+    
+    #dloss = tf.reduce_mean((gscore-0)**2 + (rscore-1)**2)
+    #gloss = tf.reduce_mean((gscore-1)**2)
 
     Adam = tf.train.AdamOptimizer
-
-    lr,b1 = 1e-4,.2 # otherwise won't converge.
+    #Adam = tf.train.MomentumOptimizer
+    
+    lr,b1 = tf.Variable(1.2e-4),.5 # otherwise won't converge.
     optimizer = Adam(lr,beta1=b1)
+    #optimizer = Adam(lr)
 
+    def l2(m):
+        l = m.get_weights()
+        return tf.reduce_mean([tf.reduce_mean(i**2)*0.01 for i in l])
     update_wd = optimizer.minimize(dloss,var_list=d.get_weights())
     update_wg = optimizer.minimize(gloss,var_list=g.get_weights())
 
@@ -146,12 +185,13 @@ def gan(g,d):
     losses = [dloss,gloss]
 
 
-    def gan_feed(sess,batch_image):
+    def gan_feed(sess,batch_image,nl,lllr):
         # actual GAN training function
         nonlocal train_step,losses,noise,real_data
 
         res = sess.run([train_step,losses],feed_dict={
         real_data:batch_image,
+        inl:nl,lr:lllr,
         })
 
         loss_values = res[1]
@@ -165,7 +205,7 @@ ct.get_session().run(tf.global_variables_initializer())
 print('Ready. enter r() to train')
 
 noise_level=.1
-def r(ep=10000):
+def r(ep=10000,lr=1e-4):
     sess = ct.get_session()
 
     np.random.shuffle(xt)
@@ -181,10 +221,9 @@ def r(ep=10000):
         # sample from cifar
         j = i % int(length/batch_size)
         minibatch = shuffled_cifar[j*batch_size:(j+1)*batch_size]
-        minibatch += np.random.normal(loc=0.,scale=noise_level,size=minibatch.shape)
 
         # train for one step
-        losses = gan_feed(sess,minibatch)
+        losses = gan_feed(sess,minibatch,noise_level,lr)
         print('dloss:{:6.4f} gloss:{:6.4f}'.format(losses[0],losses[1]))
 
         if i==ep-1 or i % 20==0: show()
@@ -208,19 +247,18 @@ def flatten_multiple_image_into_image(arr):
     import cv2
     num,uh,uw,depth = arr.shape
 
-    patches = int(num+1)
-    height = int(math.sqrt(patches)*0.9)
+    patches = num
+    height = max(1,int(math.sqrt(patches)*0.9))
     width = int(patches/height+1)
 
-    img = np.zeros((height*uh+height, width*uw+width, 3),dtype='float32')
+    img = np.zeros((height*(uh+1), width*(uw+1), 3),dtype='float32')
 
     index = 0
     for row in range(height):
         for col in range(width):
-            if index>=num-1:
-                break
-            channels = arr[index]
-            img[row*uh+row:row*uh+uh+row,col*uw+col:col*uw+uw+col,:] = channels
+            if index<num:
+                channels = arr[index]
+                img[row*(uh+1):row*(uh+1)+uh,col*(uw+1):col*(uw+1)+uw,:] = channels
             index+=1
 
     img,imgscale = autoscaler(img)
@@ -228,7 +266,7 @@ def flatten_multiple_image_into_image(arr):
     return img,imgscale
 
 def show(save=False):
-    i = np.random.normal(loc=0.,scale=1.,size=(32,zed))
+    i = np.random.normal(loc=0.,scale=1.,size=(1,8,8,zed))
     gened = gm.infer(i)
 
     gened *= 0.5

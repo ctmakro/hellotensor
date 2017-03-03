@@ -79,6 +79,7 @@ def mymodel_builder():
         i = d1(i)
         i = tf.nn.elu(i)
         i = d2(i)
+        i = ct.Act('softmax')(i)
 
         if starting_state is None:
             return i
@@ -90,27 +91,32 @@ def mymodel_builder():
 mymodel = mymodel_builder()
 
 def feed_gen():
-    x = tf.placeholder(tf.float32, shape=[None, None, corpus.shape[1]])
-    y = mymodel(x)
-    gt = tf.placeholder(tf.float32, shape=[None, None, corpus.shape[1]])
-    loss = ct.mean_softmax_cross_entropy(y,gt)
+    input_text = tf.placeholder(tf.float32,
+        shape=[None, None, corpus.shape[1]]) # [batch, timesteps, 256]
+
+    xhead = input_text[:,:-1] # head
+    gt = input_text[:,1:] # tail
+    y = mymodel(xhead)
+
+    loss = ct.cross_entropy_loss(y,gt)
 
     train_step = tf.train.AdamOptimizer(1e-3).minimize(
         loss,var_list=mymodel.get_weights())
 
-    def feed(minibatch,labels):
-        nonlocal train_step,loss,x,gt
+    def feed(minibatch):
+        nonlocal train_step,loss,input_text
         sess = ct.get_session()
-        res = sess.run([loss,train_step],feed_dict={x:minibatch,gt:labels})
+        res = sess.run([loss,train_step],feed_dict={input_text:minibatch})
         return res[0]
 
     starting_state = tf.placeholder(tf.float32, shape=[None, None])
-    stateful_y, ending_state = mymodel(x,starting_state=starting_state)
+    stateful_y, ending_state = mymodel(input_text,starting_state=starting_state)
 
     def predict(st,i):
         # stateful, to enable fast generation.
         sess = ct.get_session()
-        res = sess.run([stateful_y,ending_state],feed_dict={x:i,starting_state:st})
+        res = sess.run([stateful_y,ending_state],
+            feed_dict={input_text:i,starting_state:st})
         return res
 
     return feed,predict
@@ -118,7 +124,6 @@ def feed_gen():
 feed,predict = feed_gen()
 
 sess = ct.get_session()
-sess.run(tf.variables_initializer(mymodel.get_weights()))
 sess.run(tf.global_variables_initializer())
 
 def r(ep=100):
@@ -133,10 +138,8 @@ def r(ep=100):
 
         minibatch = corpus[j:j+mbl]
         minibatch.shape = [batch_size, time_steps, corpus.shape[1]]
-        labels = corpus[j+1:j+mbl+1]
-        labels.shape = [batch_size,time_steps,corpus.shape[1]]
 
-        loss = feed(minibatch,labels)
+        loss = feed(minibatch)
         print('loss:',loss)
 
         if i%100==0 : pass#show2()
@@ -161,9 +164,7 @@ def show2(length=400):
         starting_state = ending_state
 
         res = stateful_y[0,0] # choose the last dimension
-        dist = softmax(res) # do the softmath
-        dist = (dist - np.mean(dist) > 0) * dist # pick the greater ones
-        dist = dist / np.sum(dist) # normalize sum to 1
+        dist = res # softmax(res) # do the softmath
         code = np.random.choice(256, p=dist)
         # code = np.argmax(dist)
 

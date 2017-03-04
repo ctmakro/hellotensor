@@ -47,7 +47,7 @@ img_rows, img_cols = 32, 32
 img_channels = 3
 
 
-from loaddata import load_data
+from load_drone_data import load_data
 ximages,yvalues = load_data(False)
 
 # now split

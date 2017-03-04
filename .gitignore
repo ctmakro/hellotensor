@@ -13,3 +13,5 @@ arch.png
 *.pyc
 canton/*
 canton/
+
+*.npy

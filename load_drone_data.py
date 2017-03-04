@@ -10,8 +10,8 @@ def softmax(x):
     e_x = np.exp(x)
     return e_x / e_x.sum()
 
-source_dir = '/Users/chia/DroneSamples'
-#source_dir = 'D:/DroneSamples'
+#source_dir = '/Users/chia/DroneSamples'
+source_dir = 'D:/DroneSamples'
 
 def loadcsv(path):
 
@@ -80,10 +80,11 @@ def load_data(wantfresh=False):
         for index,y in enumerate(yarr):
             # construct heat image from description
             blank = np.zeros((64,64),dtype='uint8') #limitation
-            xstart=limit(int(32+y['xoff']-y['scale']/2))
-            xend = limit(int(32+y['xoff']+y['scale']/2))
-            ystart=limit(int(32+y['yoff']-y['scale']/2))
-            yend = limit(int(32+y['yoff']+y['scale']/2))
+            scaler = 0.3
+            xstart=limit(int(32+y['xoff']-y['scale']*scaler))
+            xend = limit(int(32+y['xoff']+y['scale']*scaler))
+            ystart=limit(int(32+y['yoff']-y['scale']*scaler))
+            yend = limit(int(32+y['yoff']+y['scale']*scaler))
 
             blank[ystart:yend,xstart:xend] = 255 # paint it white
 
@@ -91,7 +92,7 @@ def load_data(wantfresh=False):
             yvalue = blank.astype('float32')/255
 
             # yvalue = softmax(yvalue)
-            if index<10:
+            if index<3:
                 print(index)
                 print(blank)
                 print(yvalue)

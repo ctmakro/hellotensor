@@ -37,15 +37,17 @@ def detector():
     c = Can()
     c.add(Conv2D(1,16,k=3,usebias=False))
     c.add(ResConv(16,16,std=1))
-    c.add(ResConv(16,16,std=2)) # 32
     c.add(ResConv(16,16,std=1))
-    c.add(ResConv(16,32,std=2)) # 16
+    c.add(ResConv(16,32,std=2)) # 32
+    c.add(ResConv(32,32,std=1))
+    c.add(ResConv(32,32,std=1))
+    c.add(ResConv(32,32,std=2)) # 16
+    c.add(ResConv(32,32,std=1))
     c.add(ResConv(32,32,std=1))
     c.add(ResConv(32,32,std=2)) # 8
     c.add(ResConv(32,32,std=1))
-    c.add(ResConv(32,32,std=2)) # 4
-
-    c.add(Conv2D(32,1,k=1,std=1)) # 4
+    c.add(Act('relu'))
+    c.add(Conv2D(32,1,k=1,std=1)) # 8
     c.add(Act('sigmoid'))
     c.chain()
     return c

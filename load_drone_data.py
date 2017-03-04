@@ -76,7 +76,7 @@ def load_data(wantfresh=False):
         def limit(a):
             return (a if a<63 else 63) if a>0 else 0
 
-        yvalues = np.zeros((len(yarr),4,4),dtype='float32')
+        yvalues = np.zeros((len(yarr),8,8),dtype='float32')
         for index,y in enumerate(yarr):
             # construct heat image from description
             blank = np.zeros((64,64),dtype='uint8') #limitation
@@ -87,7 +87,7 @@ def load_data(wantfresh=False):
 
             blank[ystart:yend,xstart:xend] = 255 # paint it white
 
-            blank = scipy.misc.imresize(blank,(4,4),interp='bilinear')
+            blank = scipy.misc.imresize(blank,(8,8),interp='bilinear')
             yvalue = blank.astype('float32')/255
 
             # yvalue = softmax(yvalue)

@@ -60,3 +60,25 @@ def autoscaler_show(img,limit=800.):
     im,ims = autoscaler(img,limit=limit)
     cv2.imshow(str(img.shape)+' gened scale:'+str(ims),im)
     cv2.waitKey(1)
+
+def batch_image_array(arr):
+    import cv2
+    num,uh,uw,depth = arr.shape
+
+    patches = num
+    height = max(1,int(math.sqrt(patches)*0.9))
+    width = int(patches/height+1)
+
+    img = np.zeros((height*(uh+1), width*(uw+1), 3),dtype='float32')
+
+    index = 0
+    for row in range(height):
+        for col in range(width):
+            if index<num:
+                channels = arr[index]
+                img[row*(uh+1):row*(uh+1)+uh,col*(uw+1):col*(uw+1)+uw,:] = channels
+            index+=1
+
+    img,imgscale = autoscaler(img)
+
+    return img,imgscale

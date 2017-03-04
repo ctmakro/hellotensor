@@ -129,7 +129,7 @@ def dis_gen():
     c.add(conv(ndf*4+1,ndf*8)) # 2
     c.add(Conv2D(ndf*8+1,1,k=2,padding='VALID'))
     c.add(Reshape([1]))
-    c.add(Act('sigmoid'))
+    #c.add(Act('sigmoid'))
     c.chain()
     return c
 
@@ -162,11 +162,11 @@ def gan(g,d):
         return tf.reduce_mean(tf.log(i+1e-8))
 
     # single side label smoothing: replace 1.0 with 0.9
-    dloss = - (log_eps(1-gscore) + .1 * log_eps(1-rscore)+ .9*log_eps(rscore))
-    gloss = - log_eps(gscore)
+    #dloss = - (log_eps(1-gscore) + .1 * log_eps(1-rscore)+ .9*log_eps(rscore))
+    #gloss = - log_eps(gscore)
     
-    #dloss = tf.reduce_mean((gscore-0)**2 + (rscore-1)**2)
-    #gloss = tf.reduce_mean((gscore-1)**2)
+    dloss = tf.reduce_mean((gscore-0)**2 + (rscore-1)**2)
+    gloss = tf.reduce_mean((gscore-1)**2)
 
     Adam = tf.train.AdamOptimizer
     #Adam = tf.train.MomentumOptimizer

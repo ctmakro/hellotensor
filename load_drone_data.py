@@ -45,10 +45,14 @@ def loadcsv(path):
 
 def load_img_from_file(xarr):
     print('tring to load',len(xarr),'imgs from file')
-    images = np.zeros((len(xarr), 64, 64, 1), dtype="uint8")
+    # images = np.zeros((len(xarr), 64, 64, 1), dtype="uint8")
+    images = None
     for index,i in enumerate(xarr):
         imgdata = load_img(source_dir+'/composites/'+ i +'.png',grayscale=True,target_size=None)
-        images[index,:,:,:] = np.reshape(imgdata,(64,64,1))
+        if images is None:
+            images = np.zeros((len(xarr),96,96,1),dtype='uint8')
+
+        images[index,:,:,:] = np.expand_dims(imgdata,axis=2) # [h,w,1]
     return images
 
 def load_one(path):
@@ -73,22 +77,24 @@ def load_data(wantfresh=False):
         # yvalues = np.reshape(yarr,(len(yarr),1)) # this is old code, yarr is an array of boolean 0 or 1
 
         # new code for yvalues in new architecture
+        w = 96 # input size of image
+        wa = int(w/8) # output size of heatmap
         def limit(a):
-            return (a if a<63 else 63) if a>0 else 0
+            return (a if a<w-1 else w-1) if a>0 else 0
 
-        yvalues = np.zeros((len(yarr),8,8),dtype='float32')
+        yvalues = np.zeros((len(yarr),wa,wa),dtype='float32')
         for index,y in enumerate(yarr):
             # construct heat image from description
-            blank = np.zeros((64,64),dtype='uint8') #limitation
+            blank = np.zeros((w,w),dtype='uint8') #limitation
             scaler = 0.3
-            xstart=limit(int(32+y['xoff']-y['scale']*scaler))
-            xend = limit(int(32+y['xoff']+y['scale']*scaler))
-            ystart=limit(int(32+y['yoff']-y['scale']*scaler))
-            yend = limit(int(32+y['yoff']+y['scale']*scaler))
+            xstart=limit(int(w//2+y['xoff']-y['scale']*scaler))
+            xend = limit(int(w//2+y['xoff']+y['scale']*scaler))
+            ystart=limit(int(w//2+y['yoff']-y['scale']*scaler))
+            yend = limit(int(w//2+y['yoff']+y['scale']*scaler))
 
             blank[ystart:yend,xstart:xend] = 255 # paint it white
 
-            blank = scipy.misc.imresize(blank,(8,8),interp='bilinear')
+            blank = scipy.misc.imresize(blank,(wa,wa),interp='bilinear')
             yvalue = blank.astype('float32')/255
 
             # yvalue = softmax(yvalue)

@@ -58,7 +58,7 @@ print('corpus loaded. corpus[0]:',corpus[0])
 
 def mymodel_builder():
     can = ct.Can()
-    gru,d1,d2 = ct.GRU(256,256),ct.TimeDistributedDense(256,64),ct.TimeDistributedDense(64,256)
+    gru,d1,d2 = ct.GRU(256,256),ct.LastDimDense(256,64),ct.LastDimDense(64,256)
     can.incan([gru,d1,d2])
     def call(i,starting_state=None):
         i = gru(i,starting_state=starting_state)

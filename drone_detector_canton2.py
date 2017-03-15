@@ -15,12 +15,14 @@ def predetector():
     c.add(Act('lrelu'))
     c.add(Conv2D(16,16,k=5,std=2)) # 24
     c.add(Act('lrelu'))
+    c.add(Conv2D(16,16,k=5,std=1,rate=2)) # 24
+    c.add(Act('lrelu'))
     c.chain()
     return c
 
 def postdetector():
     c = Can()
-    c.add(GRUConv2D(16,32))
+    c.add(GRUConv2D(16,32,k=3,rate=2))
     c.chain()
     return c
 
@@ -58,22 +60,22 @@ def downsample(tgt):
     for i in range(len(tgt)):
         for j in range(len(tgt[0])):
             img = tgt[i,j]
-            tgtd[i,j,:,:,0] = cv2.resize(img,dsize=(sdim,sdim),interpolation=cv2.INTER_LINEAR)
+            tgtd[i,j,:,:,0] = cv2.resize(img,dsize=(sdim,sdim),interpolation=cv2.INTER_NEAREST)
     print('downsampling complete.')
     return tgtd
 
-# tgtd = downsample(tgt)
-tgtd = tgt
+tgtd = downsample(tgt)
+# tgtd = tgt
 
 def trainer():
     x,gt = ct.ph([None,None,None,3]), ct.ph([None,None,None,1])
     xf,gtf = tf.cast(x,tf.float32)/255.,tf.cast(gt,tf.float32)/255.,
 
-    s = tf.shape(gtf)
-    gtf = tf.reshape(gtf,[s[0]*s[1],s[2],s[3],s[4]])
-    gtf = MaxPool2D(k=4,std=4)(gtf) # 96->24
-    ns = tf.shape(gtf)
-    gtf = tf.reshape(gtf,[s[0],s[1],ns[1],ns[2],ns[3]])
+    # s = tf.shape(gtf)
+    # gtf = tf.reshape(gtf,[s[0]*s[1],s[2],s[3],s[4]])
+    # gtf = MaxPool2D(k=4,std=4)(gtf) # 96->24
+    # ns = tf.shape(gtf)
+    # gtf = tf.reshape(gtf,[s[0],s[1],ns[1],ns[2],ns[3]])
 
     y = tec(xf)
     loss = ct.binary_cross_entropy_loss(y,gtf)

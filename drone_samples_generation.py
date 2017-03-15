@@ -120,8 +120,8 @@ class ForeBackPair:
             pass
         else:
             fgroi,bgroi = isectgr
-            bgroi[:] = fgroi[:]
-            # bgroi[:] = 1.
+            # bgroi[:] = fgroi[:]
+            bgroi[:] = 1.
 
         return out,gt
 

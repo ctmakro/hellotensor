@@ -111,17 +111,32 @@ class ForeBackPair:
         out = bgcrop
 
         # 7. ground truth label
-        offsets = [output_size[0]//2-fgscaled.shape[0]//2+fg_offsets[0], \
-                    output_size[1]//2-fgscaled.shape[1]//2+fg_offsets[1]]
-        offsets = [int(k) for k in offsets]
-        gt = np.zeros(output_size+[1],dtype='float32')
-        isectgr = filt.intersect_get_roi(gt,fgscaled[:,:,3:4],offsets)
-        if isectgr is None:
-            pass
+        s0,s1 = fgscaled.shape[0],fgscaled.shape[1]
+        
+        if False: # below code if semantic segmentation
+            offsets = [output_size[0]/2-s0/2+fg_offsets[0], \
+                        output_size[1]/2-s1/2+fg_offsets[1]]
+            offsets = [int(k) for k in offsets]
+            gt = np.zeros(output_size+[1],dtype='float32')
+            isectgr = filt.intersect_get_roi(gt,fgscaled[:,:,3:4],offsets)
+            if isectgr is None:
+                pass
+            else:
+                fgroi,bgroi = isectgr
+                bgroi[:] = fgroi[:]
+                #bgroi[:] = 1.
         else:
-            fgroi,bgroi = isectgr
-            # bgroi[:] = fgroi[:]
-            bgroi[:] = 1.
+            offsets = [output_size[0]/2+fg_offsets[0], \
+                output_size[1]/2+fg_offsets[1]]
+            offsets = [int(k) for k in offsets]
+            gt = np.zeros(output_size+[1],dtype='float32')
+            if offsets[0]>0 and offsets[0]<output_size[0]-1:
+                if offsets[1]>0 and offsets[1]<output_size[1]-1:
+                    gt[offsets[0],offsets[1]] = 1.
+                    gt = cv2.blur(gt,(3,3))
+                    gt = cv2.blur(gt,(3,3))
+                    gt = np.minimum(gt*20,1.)
+                    gt.shape = gt.shape+(1,)  
 
         return out,gt
 

@@ -99,12 +99,13 @@ yt = tgtd
 def r(ep=10,lr=1e-3):
     for i in range(ep):
         print('ep',i)
-        bs = 5
+        bs = 20
         for j in range(len(xt)//bs):
             mbx = xt[j*bs:(j+1)*bs]
             mby = yt[j*bs:(j+1)*bs]
             loss = feed(mbx,mby,lr)
             print(j*bs,'loss:',loss)
+        show()
 
 def show(): # evaluate result on validation set
     from cv2tools import filt,vis

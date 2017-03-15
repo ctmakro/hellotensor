@@ -215,11 +215,11 @@ def generate():
     timg = np.stack(timg,axis=0)
     tgt = np.stack(tgt,axis=0)
 
-    timg = (timg*255.).astype('uint8')
-    tgt = tgt>0.5
+    timg = (np.clip(timg,a_min=0.,a_max=1.)*255.).astype('uint8')
+    tgt = (np.clip(tgt,a_min=0.,a_max=1.)*255.).astype('uint8')
 
     print('generated.')
-    print(timg.shape,tgt.shape)
+    print(timg.shape,timg.dtype,tgt.shape,tgt.dtype)
 
 def saveall(filename):
     with open(filename+'.npy','wb') as f:

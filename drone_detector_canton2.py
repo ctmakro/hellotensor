@@ -11,45 +11,48 @@ timg,tgt = load_dataset('drone_dataset_96x96')
 
 def predetector():
     c = Can() # [N*T H W C]
-    c.add(Conv2D(3,16,k=5,std=2,padding='VALID')) # 96 - 4 / 2 = 46
+    c.add(Conv2D(3,8,k=5,std=2,padding='VALID')) # 128 - 4 / 2 = 62
     c.add(Act('lrelu'))
-    c.add(Conv2D(16,16,k=5,std=2,padding='VALID')) # 46 - 4 / 2 = 21
+    c.add(Conv2D(8,12,k=5,std=2,padding='VALID')) # 62 - 4 / 2 = 29
     c.add(Act('lrelu'))
-    c.add(Conv2D(16,16,k=5,std=1,padding='VALID')) # 21 - 4 = 17
+    c.add(Conv2D(12,16,k=5,std=1,padding='VALID')) # 29 - 4 = 25
     c.add(Act('lrelu'))
     c.chain()
     return c
 
 def postdetector():
-    c = Can()
-    c.add(GRUConv2D(16,16,k=5,rate=3))
-    c.chain()
-    return c
+    return GRUConv2D(16,8,k=5,rate=2)
 
 pre_det = predetector()
 post_det = postdetector()
 
-def trainable_detector():
+def trainable_detector(): # use this to train final network (with GRU)
     c = Can()
     pd = c.add(pre_det)
     pod = c.add(post_det)
-    fc = c.add(LastDimDense(16,1))
+    fc = c.add(LastDimDense(8,1))
 
-    def call(i):
+    def call(i,starting_state=None):
         s = tf.shape(i) #[NTHWC]
         i = tf.reshape(i,shape=[s[0]*s[1],s[2],s[3],s[4]])
         i = pd(i) # predetection
 
         ns = tf.shape(i)
         i = tf.reshape(i,shape=[s[0],s[1],ns[1],ns[2],ns[3]])
-        i = pod(i) # post
+        i = pod(i,starting_state=starting_state) # post
+        
+        t = s[1] # timesteps
+        ending_state = i[:,t-1,:,:,:] # extract ending_state
+        
         i = fc(i)
         i = Act('sigmoid')(i)
-        return i
+
+        return i, ending_state
+        
     c.set_function(call)
     return c
     
-def trainable_detector2():
+def trainable_detector2(): # use this to train predetector
     c = Can()
     pd = c.add(pre_det)
     fc = c.add(Conv2D(16,1,k=1))
@@ -73,14 +76,14 @@ tec.summary()
 def downsample(tgt):
     print('downsampling gt...')
     s = tgt.shape
-    sdim = 24
-    adim = 17
+    sdim = 32
+    adim = 25
     offs = int((sdim-adim) / 2)
     tgtd = np.zeros((s[0],s[1],adim,adim,s[4]),dtype='uint8')
     for i in range(len(tgt)):
         for j in range(len(tgt[0])):
             img = tgt[i,j].astype('float32')
-            img = np.minimum(cv2.blur(img,(5,5)) * 20, 255.)
+            img = np.minimum(cv2.blur(cv2.blur(img,(5,5)),(5,5)) * 10, 255.)
             img = cv2.resize(img,dsize=(sdim,sdim),interpolation=cv2.INTER_LINEAR)
             tgtd[i,j,:,:,0] = img[offs:offs+adim,offs:offs+adim].astype('uint8')
     print('downsampling complete.')
@@ -99,8 +102,10 @@ def trainer():
     # ns = tf.shape(gtf)
     # gtf = tf.reshape(gtf,[s[0],s[1],ns[1],ns[2],ns[3]])
 
-    y = tec(xf)
-    loss = ct.binary_cross_entropy_loss(y,gtf,l=0.1)
+    xf += tf.random_normal(tf.shape(xf),stddev=0.05)
+    
+    y, _ending_state = tec(xf)
+    loss = ct.binary_cross_entropy_loss(y,gtf,l=0.3) # bias against black
     lr = tf.Variable(1e-3)
 
     print('connecting optimizer...')
@@ -111,9 +116,26 @@ def trainer():
         sess = ct.get_session()
         res = sess.run([train_step,loss],feed_dict={x:xin,gt:yin,lr:ilr})
         return res[1] # loss
-    return feed
+        
+    #tf.placeholder(tf.float32, shape=[None, None])
+    starting_state = ct.ph([None,None,8]) # an image of some sort
+    stateful_y, ending_state = tec(xf,starting_state=starting_state)
+    
+    def stateful_predict(st,i):
+        # stateful, to enable fast generation.
+        sess = ct.get_session()
+        
+        if st is None: # if starting state not exist yet
+            res = sess.run([y,_ending_state],
+                feed_dict={x:i})
+        else:
+            res = sess.run([stateful_y,ending_state],
+                feed_dict={x:i,starting_state:st})
+        return res
+        
+    return feed,stateful_predict
 
-feed = trainer()
+feed,stateful_predict = trainer()
 ct.get_session().run(ct.gvi()) # global init
 
 xt = timg
@@ -137,9 +159,17 @@ def show(): # evaluate result on validation set
     mbx = xt[index:index+1]
     mby = yt[index:index+1]
 
-    result = tec.infer(mbx.astype('float32')/255. - .5)
-    print(result.shape)
+    gru_state = None
+    resarr = []
+    for i in range(len(mbx[0])): # timesteps
+        resy,state = stateful_predict(gru_state, mbx[0:1,i:i+1])
+        resarr.append(resy) # [1,1,h,w,1]
+        gru_state = state
+        
+    resarr = np.concatenate(resarr,axis=1)
+    
+    print(resarr.shape)
 
     vis.show_batch_autoscaled(mbx[0],name='input image')
-    vis.show_batch_autoscaled(result[0],name='inference')
+    vis.show_batch_autoscaled(resarr[0],name='inference')
     vis.show_batch_autoscaled(mby[0],name='ground truth')

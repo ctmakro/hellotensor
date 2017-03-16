@@ -100,7 +100,8 @@ class ForeBackPair:
         # fgscaled = filt.apply_vector_motion_blur(fgscaled,fg_blur)
 
         # 5. blur the alpha a little bit
-        fgscaled[:,:,3] = cv2.blur(fgscaled[:,:,3:4],(2,2))
+        fgscaled = cv2.blur(fgscaled,(2,2))
+        # fgscaled[:,:,3] = cv2.blur(fgscaled[:,:,3:4],(2,2))
 
         # 6. alpha overlay with offsets
         offsets = [output_size[0]//2-fgscaled.shape[0]//2+fg_offsets[0], \
@@ -142,11 +143,11 @@ class ForeBackPair:
 
     def compose_batch(self,output_size,batch_size,show=True):
         bs = batch_size
-        bgrw,bgs = random_walk(bs,ipos=.5,ispd=3.,acc=1.) #rw position and speed
+        bgrw,bgs = random_walk(bs,ipos=.5,ispd=5.,acc=1.) #rw position and speed
         fgrw,fgs = random_walk(bs,ipos=.5,ispd=5.,acc=2.)
 
         bgrw -= np.mean(bgrw) # normalization
-        fgrw -= np.mean(fgrw)+np.random.uniform(40)-20 # normalization
+        fgrw -= np.mean(fgrw) # +np.random.uniform(40)-20 # normalization
 
         batch_img = []
         batch_gt = []
@@ -202,7 +203,7 @@ def compose_one_batch(bs,random=False,show=True):
             fbp.fg_scale = rn(1)**2*0.4 + 0.2
             fbp.bg_scale = 0.9 + rn(3)
             fbp.fg_angle = rn(180)-90
-            bimg,bgt = fbp.compose_batch([96,96], bs, show=show)
+            bimg,bgt = fbp.compose_batch([128,128], bs, show=show)
             break
         except NameError as e:
             print(e)
@@ -220,8 +221,8 @@ def generate():
 
     global timg,tgt
     # 8-bit placeholder
-    timg8,tgt8 = np.zeros((num_track,num_per_track,96,96,3),dtype='uint8'),\
-        np.zeros((num_track,num_per_track,96,96,1),dtype='uint8')
+    timg8,tgt8 = np.zeros((num_track,num_per_track,128,128,3),dtype='uint8'),\
+        np.zeros((num_track,num_per_track,128,128,1),dtype='uint8')
 
     print('total:',num_track,'per track:',num_per_track)
     for i in range(num_track):

@@ -112,7 +112,7 @@ class ForeBackPair:
 
         # 7. ground truth label
         s0,s1 = fgscaled.shape[0],fgscaled.shape[1]
-        
+
         if False: # below code if semantic segmentation
             offsets = [output_size[0]/2-s0/2+fg_offsets[0], \
                         output_size[1]/2-s1/2+fg_offsets[1]]
@@ -136,13 +136,13 @@ class ForeBackPair:
                     gt = cv2.blur(gt,(3,3))
                     gt = cv2.blur(gt,(3,3))
                     gt = np.minimum(gt*20,1.)
-                    gt.shape = gt.shape+(1,)  
+                    gt.shape = gt.shape+(1,)
 
         return out,gt
 
     def compose_batch(self,output_size,batch_size,show=True):
         bs = batch_size
-        bgrw,bgs = random_walk(bs,ipos=.5,ispd=2.,acc=0.2) #rw position and speed
+        bgrw,bgs = random_walk(bs,ipos=.5,ispd=3.,acc=1.) #rw position and speed
         fgrw,fgs = random_walk(bs,ipos=.5,ispd=5.,acc=2.)
 
         bgrw -= np.mean(bgrw) # normalization
@@ -215,24 +215,26 @@ def test():
     compose_one_batch(20)
 
 def generate():
-    num_track = 2000 # number of tracks
+    num_track = 4000 # number of tracks
     num_per_track = 8 # length of each track
 
     global timg,tgt
-    timg,tgt = [],[]
+    # 8-bit placeholder
+    timg8,tgt8 = np.zeros((num_track,num_per_track,96,96,3),dtype='uint8'),\
+        np.zeros((num_track,num_per_track,96,96,1),dtype='uint8')
+
     print('total:',num_track,'per track:',num_per_track)
     for i in range(num_track):
         print('track #',i)
+
+        # generate
         bimg,bgt = compose_one_batch(num_per_track,random=True,show=(i%100==0))
-        timg.append(bimg)
-        tgt.append(bgt)
 
-    timg = np.stack(timg,axis=0)
-    tgt = np.stack(tgt,axis=0)
+        # convert and fill (lower memory consumption)
+        timg8[i] = (np.clip(bimg,a_min=0.,a_max=1.)*255.).astype('uint8')
+        tgt8[i] = (np.clip(bgt,a_min=0.,a_max=1.)*255.).astype('uint8')
 
-    timg = (np.clip(timg,a_min=0.,a_max=1.)*255.).astype('uint8')
-    tgt = (np.clip(tgt,a_min=0.,a_max=1.)*255.).astype('uint8')
-
+    timg,tgt = timg8,tgt8
     print('generated.')
     print(timg.shape,timg.dtype,tgt.shape,tgt.dtype)
 

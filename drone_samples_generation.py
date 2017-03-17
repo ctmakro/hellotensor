@@ -51,7 +51,14 @@ class ForeBackPair:
         self.bg_offsets = rn(bg.shape[0]-200)+100,rn(bg.shape[1]-200)+100
 
     # note: all (y,x) or (h,w) pairs!
-    def compose_one(self,output_size,fg_offsets,bg_offsets,fg_blur=[0,0],bg_blur=[0,0]):
+    def compose_one(self,output_size,
+        fg_offsets,bg_offsets,
+        fg_blur=[0,0],bg_blur=[0,0],
+        fg_gamma=1,
+        bg_gamma=1,
+        fg_beta=0.,
+        bg_beta=0.):
+
         def limit(lower,upper): # generate a limiter
             return lambda x:int(np.clip(x,a_min=lower,a_max=upper))
         # 1. crop a piece from background
@@ -81,7 +88,10 @@ class ForeBackPair:
         # 3. mblur the bg
         bgcrop = filt.apply_vector_motion_blur(bgcrop,bg_blur)
 
-        # 3. motion blur the foreground, before rotation and scale
+        # 3a. brightness
+        bgcrop = bgcrop * bg_gamma + bg_beta
+
+        # 4. motion blur the foreground, before rotation and scale
         rad = np.arctan2(-fg_blur[0],fg_blur[1])
         l1 = max(abs(fg_blur[0]),abs(fg_blur[1])) * (1./self.fg_scale)
         l1 = int(l1)
@@ -89,21 +99,22 @@ class ForeBackPair:
             dim=l1,
             angle=(rad/math.pi*180)-self.fg_angle)
 
-        # 4. rotate and scale the foreground
+        # 5. rotate and scale the foreground
         fgscaled = filt.rotate_scale(fgblurred,
             self.fg_angle,
             self.fg_scale)
         # print(self.fg.shape,'fg scaled. shape:',fgscaled.shape)
         # vis.show_autoscaled(fgscaled)
 
-        # # 4. motion blur the foreground
-        # fgscaled = filt.apply_vector_motion_blur(fgscaled,fg_blur)
+        # 5a. brightness
+        fgscaled[:,:,0:3]*=fg_gamma
+        fgscaled[:,:,0:3]+=fg_beta
 
-        # 5. blur the alpha a little bit
+        # 6. blur the alpha a little bit
         fgscaled = cv2.blur(fgscaled,(2,2))
         # fgscaled[:,:,3] = cv2.blur(fgscaled[:,:,3:4],(2,2))
 
-        # 6. alpha overlay with offsets
+        # 7. alpha overlay with offsets
         offsets = [output_size[0]//2-fgscaled.shape[0]//2+fg_offsets[0], \
                     output_size[1]//2-fgscaled.shape[1]//2+fg_offsets[1]]
         offsets = [int(k) for k in offsets]
@@ -111,10 +122,10 @@ class ForeBackPair:
 
         out = bgcrop
 
-        # 7. ground truth label
+        # 8. ground truth label
         s0,s1 = fgscaled.shape[0],fgscaled.shape[1]
 
-        if False: # below code if semantic segmentation
+        if True: # below code if semantic segmentation (alpha of the drone)
             offsets = [output_size[0]/2-s0/2+fg_offsets[0], \
                         output_size[1]/2-s1/2+fg_offsets[1]]
             offsets = [int(k) for k in offsets]
@@ -126,7 +137,8 @@ class ForeBackPair:
                 fgroi,bgroi = isectgr
                 bgroi[:] = fgroi[:]
                 #bgroi[:] = 1.
-        else:
+
+        else: # below code produces a dot
             offsets = [output_size[0]/2+fg_offsets[0], \
                 output_size[1]/2+fg_offsets[1]]
             offsets = [int(k) for k in offsets]
@@ -152,10 +164,21 @@ class ForeBackPair:
         batch_img = []
         batch_gt = []
 
+        fg_gamma = rn(1)+.4
+        fg_beta = .25 - rn(.5)
+        bg_gamma = rn(1)+.4
+        bg_beta = .25 - rn(.5)
+
         for i in range(len(bgrw)):
             if True: # test flag
-                img,gt = self.compose_one(output_size,fgrw[i],bgrw[i],
-                    fg_blur=fgs[i]/2,bg_blur=bgs[i]/2)
+                img,gt = self.compose_one(output_size,
+                    fgrw[i],bgrw[i],
+                    fg_blur=fgs[i]/2,
+                    bg_blur=bgs[i]/2,
+                    fg_gamma=fg_gamma,
+                    bg_gamma=bg_gamma,
+                    fg_beta=fg_beta,
+                    bg_beta=bg_beta)
             else:
                 img,gt = self.compose_one(output_size,fgrw[i]*0,bgrw[i]*0,
                     fg_blur=fgs[i]/2*0,bg_blur=bgs[i]/2*0)
@@ -236,7 +259,8 @@ def generate(num_track=500):
         # generate
         bimg,bgt = compose_one_batch(num_per_track,
             random=True,
-            show=((i%100==0) and running_main))
+            show=((i%1==0) and running_main))
+            # if running as main, show every sample
 
         # convert and fill (lower memory consumption)
         timg8[i] = (np.clip(bimg,a_min=0.,a_max=1.)*255.).astype('uint8')

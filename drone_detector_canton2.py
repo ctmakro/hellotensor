@@ -12,17 +12,19 @@ from drone_samples_generation import generate
 
 def predetector():
     c = Can() # [N*T H W C]
-    c.add(Conv2D(3,8,k=5,std=2,padding='VALID')) # 128 - 4 / 2 = 62
+    c.add(Conv2D(3,16,k=5,std=1,padding='VALID')) # 128 - 4 / 2 = 62
     c.add(Act('lrelu'))
-    c.add(Conv2D(8,12,k=5,std=2,padding='VALID')) # 62 - 4 / 2 = 29
+    c.add(MaxPool2D(k=2,std=2))
+    c.add(Conv2D(16,16,k=5,std=1,padding='VALID')) # 62 - 4 / 2 = 29
     c.add(Act('lrelu'))
-    c.add(Conv2D(12,16,k=5,std=1,padding='VALID')) # 29 - 4 = 25
+    c.add(MaxPool2D(k=2,std=2))
+    c.add(Conv2D(16,16,k=5,std=1,padding='VALID')) # 29 - 4 = 25
     c.add(Act('lrelu'))
     c.chain()
     return c
 
 def postdetector():
-    return GRUConv2D(16,8,k=5,rate=2)
+    return GRUConv2D(16,16,k=5,std=1)
 
 pre_det = predetector()
 post_det = postdetector()
@@ -30,8 +32,10 @@ post_det = postdetector()
 def trainable_detector(): # use this to train final network (with GRU)
     c = Can()
     pd = c.add(pre_det)
-    pod = c.add(post_det)
-    fc = c.add(LastDimDense(8,1))
+    bypassgru = False
+    if not bypassgru:
+        pod = c.add(post_det)
+    fc = c.add(LastDimDense(16,1))
 
     def call(i,starting_state=None):
         s = tf.shape(i) #[NTHWC]
@@ -40,7 +44,9 @@ def trainable_detector(): # use this to train final network (with GRU)
 
         ns = tf.shape(i)
         i = tf.reshape(i,shape=[s[0],s[1],ns[1],ns[2],ns[3]])
-        i = pod(i,starting_state=starting_state) # post
+        
+        if not bypassgru: # if you want to bypass GRU (pre-train the lower layers...)
+            i = pod(i,starting_state=starting_state) # post
 
         t = s[1] # timesteps
         ending_state = i[:,t-1,:,:,:] # extract ending_state
@@ -50,24 +56,6 @@ def trainable_detector(): # use this to train final network (with GRU)
 
         return i, ending_state
 
-    c.set_function(call)
-    return c
-
-def trainable_detector2(): # use this to train predetector
-    c = Can()
-    pd = c.add(pre_det)
-    fc = c.add(Conv2D(16,1,k=1))
-
-    def call(i):
-        s = tf.shape(i) #[NTHWC]
-        i = tf.reshape(i,shape=[s[0]*s[1],s[2],s[3],s[4]])
-        i = pd(i) # predetection
-        i = fc(i)
-        ns = tf.shape(i)
-        i = Act('sigmoid')(i)
-        i = tf.reshape(i,shape=[s[0],s[1],ns[1],ns[2],ns[3]])
-
-        return i
     c.set_function(call)
     return c
 
@@ -103,7 +91,7 @@ def trainer():
     xf += tf.random_normal(tf.shape(xf),stddev=0.05)
 
     y, _ending_state = tec(xf)
-    loss = ct.binary_cross_entropy_loss(y,gtf,l=0.3) # bias against black
+    loss = ct.binary_cross_entropy_loss(y,gtf,l=0.1) # bias against black
     lr = tf.Variable(1e-3)
 
     print('connecting optimizer...')
@@ -116,7 +104,7 @@ def trainer():
         return res[1] # loss
 
     #tf.placeholder(tf.float32, shape=[None, None])
-    starting_state = ct.ph([None,None,8]) # an image of some sort
+    starting_state = ct.ph([None,None,None]) # an image of some sort
     stateful_y, ending_state = tec(xf,starting_state=starting_state)
 
     def stateful_predict(st,i):
@@ -140,7 +128,7 @@ from collections import deque
 import threading as th
 
 sampleque = deque()
-samplethread = None
+samplethread = [None,None]
 def sampleloop():
     # generate samples, then put them into the que, over and over again
     while True:
@@ -158,12 +146,13 @@ def needsamples(count):
     # xt,yt = timg,tgtd
 
     global samplethread
-    if samplethread is None:
-        samplethread = th.Thread(target=sampleloop)
-        samplethread.start()
-    if not samplethread.is_alive():
-        samplethread = th.Thread(target=sampleloop)
-        samplethread.start()
+    for i in range(len(samplethread)):
+        if samplethread[i] is None:
+            samplethread[i] = th.Thread(target=sampleloop)
+            samplethread[i].start()
+        if not samplethread[i].is_alive():
+            samplethread[i] = th.Thread(target=sampleloop)
+            samplethread[i].start()
 
     xt,yt = [],[]
     while True:

@@ -5,7 +5,10 @@ import tensorflow as tf
 import canton as ct
 from canton import *
 import cv2
-from drone_samples_reload import load_dataset
+
+# from drone_samples_reload import load_dataset
+# don't load from file, but generate on the fly
+from drone_samples_generation import generate
 
 def predetector():
     c = Can() # [N*T H W C]
@@ -130,9 +133,21 @@ def trainer():
 
     return feed,stateful_predict
 
+def needsamples(count):
+    # generate our own set of samples from scratch
+    timg,tgt = generate(count)
+    tgtd = downsample(tgt)
+    xt,yt = timg,tgtd
+    print('generation done.')
+    return xt,yt
+
 def r(ep=10,lr=1e-3):
     for i in range(ep):
         print('ep',i)
+
+        # generate our own set of samples from scratch
+        xt,yt = needsamples(200)
+
         bs = 20
         for j in range(len(xt)//bs):
             mbx = xt[j*bs:(j+1)*bs]
@@ -144,6 +159,9 @@ def r(ep=10,lr=1e-3):
 def show(): # evaluate result on validation set
     from cv2tools import filt,vis
     import cv2
+
+    # generate our own set of samples from scratch
+    xt,yt = needsamples(1)
 
     index = np.random.choice(len(xt))
     mbx = xt[index:index+1]
@@ -165,14 +183,10 @@ def show(): # evaluate result on validation set
     vis.show_batch_autoscaled(mby[0],name='ground truth')
 
 if __name__ == '__main__':
-    timg,tgt = load_dataset('drone_dataset_96x96')
-    tgtd = downsample(tgt)
+    # timg,tgt = load_dataset('drone_dataset_96x96')
+    # tgtd = downsample(tgt)
     # tgtd = tgt
 
     feed,stateful_predict = trainer()
     ct.get_session().run(ct.gvi()) # global init
-
-    xt = timg
-    yt = tgtd
-
     print('ready. enter r() to train, show() to test.')

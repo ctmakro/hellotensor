@@ -7,8 +7,6 @@ from canton import *
 import cv2
 from drone_samples_reload import load_dataset
 
-timg,tgt = load_dataset('drone_dataset_96x96')
-
 def predetector():
     c = Can() # [N*T H W C]
     c.add(Conv2D(3,8,k=5,std=2,padding='VALID')) # 128 - 4 / 2 = 62
@@ -40,18 +38,18 @@ def trainable_detector(): # use this to train final network (with GRU)
         ns = tf.shape(i)
         i = tf.reshape(i,shape=[s[0],s[1],ns[1],ns[2],ns[3]])
         i = pod(i,starting_state=starting_state) # post
-        
+
         t = s[1] # timesteps
         ending_state = i[:,t-1,:,:,:] # extract ending_state
-        
+
         i = fc(i)
         i = Act('sigmoid')(i)
 
         return i, ending_state
-        
+
     c.set_function(call)
     return c
-    
+
 def trainable_detector2(): # use this to train predetector
     c = Can()
     pd = c.add(pre_det)
@@ -65,7 +63,7 @@ def trainable_detector2(): # use this to train predetector
         ns = tf.shape(i)
         i = Act('sigmoid')(i)
         i = tf.reshape(i,shape=[s[0],s[1],ns[1],ns[2],ns[3]])
-        
+
         return i
     c.set_function(call)
     return c
@@ -89,9 +87,6 @@ def downsample(tgt):
     print('downsampling complete.')
     return tgtd
 
-tgtd = downsample(tgt)
-# tgtd = tgt
-
 def trainer():
     x,gt = ct.ph([None,None,None,3]), ct.ph([None,None,None,1])
     xf,gtf = tf.cast(x,tf.float32)/255.-.5,tf.cast(gt,tf.float32)/255.,
@@ -103,7 +98,7 @@ def trainer():
     # gtf = tf.reshape(gtf,[s[0],s[1],ns[1],ns[2],ns[3]])
 
     xf += tf.random_normal(tf.shape(xf),stddev=0.05)
-    
+
     y, _ending_state = tec(xf)
     loss = ct.binary_cross_entropy_loss(y,gtf,l=0.3) # bias against black
     lr = tf.Variable(1e-3)
@@ -116,15 +111,15 @@ def trainer():
         sess = ct.get_session()
         res = sess.run([train_step,loss],feed_dict={x:xin,gt:yin,lr:ilr})
         return res[1] # loss
-        
+
     #tf.placeholder(tf.float32, shape=[None, None])
     starting_state = ct.ph([None,None,8]) # an image of some sort
     stateful_y, ending_state = tec(xf,starting_state=starting_state)
-    
+
     def stateful_predict(st,i):
         # stateful, to enable fast generation.
         sess = ct.get_session()
-        
+
         if st is None: # if starting state not exist yet
             res = sess.run([y,_ending_state],
                 feed_dict={x:i})
@@ -132,14 +127,9 @@ def trainer():
             res = sess.run([stateful_y,ending_state],
                 feed_dict={x:i,starting_state:st})
         return res
-        
+
     return feed,stateful_predict
 
-feed,stateful_predict = trainer()
-ct.get_session().run(ct.gvi()) # global init
-
-xt = timg
-yt = tgtd
 def r(ep=10,lr=1e-3):
     for i in range(ep):
         print('ep',i)
@@ -165,11 +155,24 @@ def show(): # evaluate result on validation set
         resy,state = stateful_predict(gru_state, mbx[0:1,i:i+1])
         resarr.append(resy) # [1,1,h,w,1]
         gru_state = state
-        
+
     resarr = np.concatenate(resarr,axis=1)
-    
+
     print(resarr.shape)
 
     vis.show_batch_autoscaled(mbx[0],name='input image')
     vis.show_batch_autoscaled(resarr[0],name='inference')
     vis.show_batch_autoscaled(mby[0],name='ground truth')
+
+if __name__ == '__main__':
+    timg,tgt = load_dataset('drone_dataset_96x96')
+    tgtd = downsample(tgt)
+    # tgtd = tgt
+
+    feed,stateful_predict = trainer()
+    ct.get_session().run(ct.gvi()) # global init
+
+    xt = timg
+    yt = tgtd
+
+    print('ready. enter r() to train, show() to test.')

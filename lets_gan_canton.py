@@ -47,8 +47,6 @@ def cifar():
     X_test-=0.5
 
     return X_train,Y_train,X_test,Y_test
-print('loading cifar...')
-xt,yt,xv,yv = cifar()
 
 def gen_gen():
     c = Can()
@@ -177,9 +175,9 @@ def gan(g,d):
 
     def l2(m):
         l = m.get_weights()
-        return tf.reduce_mean([tf.reduce_mean(i**2)*0.01 for i in l])
+        return tf.reduce_sum([tf.reduce_sum(i**2)*1e-7 for i in l])
     update_wd = optimizer.minimize(dloss,var_list=d.get_weights())
-    update_wg = optimizer.minimize(gloss,var_list=g.get_weights())
+    update_wg = optimizer.minimize(gloss+l2(g),var_list=g.get_weights())
 
     train_step = [update_wd, update_wg]
     losses = [dloss,gloss]
@@ -198,11 +196,16 @@ def gan(g,d):
         return loss_values #[dloss,gloss]
     return gan_feed
 
-print('generating GAN...')
-gan_feed = gan(gm,dm)
+if __name__=='__main__':
+    print('loading cifar...')
+    global xt,yt,xv,yv
+    xt,yt,xv,yv = cifar()
+    
+    print('generating GAN...')
+    gan_feed = gan(gm,dm)
 
-ct.get_session().run(tf.global_variables_initializer())
-print('Ready. enter r() to train')
+    ct.get_session().run(tf.global_variables_initializer())
+    print('Ready. enter r() to train, show() to test')
 
 noise_level=.1
 def r(ep=10000,lr=1e-4):
@@ -214,7 +217,7 @@ def r(ep=10000,lr=1e-4):
 
     for i in range(ep):
         global noise_level
-        noise_level *= 0.99
+        noise_level *= 0.999
         print('---------------------------')
         print('iter',i,'noise',noise_level)
 
@@ -228,53 +231,15 @@ def r(ep=10000,lr=1e-4):
 
         if i==ep-1 or i % 20==0: show()
 
-def autoscaler(img):
-    limit = 400.
-    # scales = [0.1,0.125,1./6.,0.2,0.25,1./3.,1./2.] + range(100)
-    scales = np.hstack([1./np.linspace(10,2,num=9), np.linspace(1,100,num=100)])
-
-    imgscale = limit/float(img.shape[0])
-    for s in scales:
-        if s>=imgscale:
-            imgscale=s
-            break
-
-    img = cv2.resize(img,dsize=(int(img.shape[1]*imgscale),int(img.shape[0]*imgscale)),interpolation=cv2.INTER_NEAREST)
-
-    return img,imgscale
-
-def flatten_multiple_image_into_image(arr):
-    import cv2
-    num,uh,uw,depth = arr.shape
-
-    patches = num
-    height = max(1,int(math.sqrt(patches)*0.9))
-    width = int(patches/height+1)
-
-    img = np.zeros((height*(uh+1), width*(uw+1), 3),dtype='float32')
-
-    index = 0
-    for row in range(height):
-        for col in range(width):
-            if index<num:
-                channels = arr[index]
-                img[row*(uh+1):row*(uh+1)+uh,col*(uw+1):col*(uw+1)+uw,:] = channels
-            index+=1
-
-    img,imgscale = autoscaler(img)
-
-    return img,imgscale
-
 def show(save=False):
+    from cv2tools import vis,filt
     i = np.random.normal(loc=0.,scale=1.,size=(1,8,8,zed))
     gened = gm.infer(i)
 
     gened *= 0.5
     gened +=0.5
 
-    im,ims = flatten_multiple_image_into_image(gened)
-    cv2.imshow('gened scale:'+str(ims),im)
-    cv2.waitKey(1)
+    vis.show_autoscaled(gened[0],name='generated',limit=800)
 
     if save!=False:
         cv2.imwrite(save,im*255)

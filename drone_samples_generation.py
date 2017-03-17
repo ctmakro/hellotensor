@@ -215,11 +215,16 @@ def compose_one_batch(bs,random=False,show=True):
 def test():
     compose_one_batch(20)
 
-def generate():
-    num_track = 4000 # number of tracks
-    num_per_track = 8 # length of each track
+def generate(num_track=500):
+    num_track = num_track # number of tracks
+    num_per_track = 16 # length of each track
 
-    global timg,tgt
+    if __name__=='__main__':
+        global timg,tgt
+        running_main=True
+    else:
+        running_main=False
+
     # 8-bit placeholder
     timg8,tgt8 = np.zeros((num_track,num_per_track,128,128,3),dtype='uint8'),\
         np.zeros((num_track,num_per_track,128,128,1),dtype='uint8')
@@ -229,7 +234,9 @@ def generate():
         print('track #',i)
 
         # generate
-        bimg,bgt = compose_one_batch(num_per_track,random=True,show=(i%100==0))
+        bimg,bgt = compose_one_batch(num_per_track,
+            random=True,
+            show=((i%100==0) and running_main))
 
         # convert and fill (lower memory consumption)
         timg8[i] = (np.clip(bimg,a_min=0.,a_max=1.)*255.).astype('uint8')
@@ -239,6 +246,12 @@ def generate():
     print('generated.')
     print(timg.shape,timg.dtype,tgt.shape,tgt.dtype)
 
+    if not running_main:
+        return timg,tgt
+
 def saveall(filename):
     with open(filename+'.npy','wb') as f:
         np.savez(f,timg=timg,tgt=tgt)
+
+if __name__=='__main__':
+    pass

@@ -75,7 +75,7 @@ tec = trainable_detector()
 tec.summary()
 
 def downsample(tgt):
-    print('downsampling gt...')
+    # print('downsampling gt...')
     s = tgt.shape
     sdim = 32
     adim = 25
@@ -87,7 +87,7 @@ def downsample(tgt):
             img = np.minimum(cv2.blur(cv2.blur(img,(5,5)),(5,5)) * 10, 255.)
             img = cv2.resize(img,dsize=(sdim,sdim),interpolation=cv2.INTER_LINEAR)
             tgtd[i,j,:,:,0] = img[offs:offs+adim,offs:offs+adim].astype('uint8')
-    print('downsampling complete.')
+    # print('downsampling complete.')
     return tgtd
 
 def trainer():
@@ -133,13 +133,54 @@ def trainer():
 
     return feed,stateful_predict
 
+
+# async mechanism to generate samples.
+import time
+from collections import deque
+import threading as th
+
+sampleque = deque()
+samplethread = None
+def sampleloop():
+    # generate samples, then put them into the que, over and over again
+    while True:
+        if len(sampleque)<500:
+            timg,tgt = generate(1)
+            tgtd = downsample(tgt)
+            xt,yt = timg[0],tgtd[0]
+            sampleque.appendleft((xt,yt))
+        else:
+            break
 def needsamples(count):
     # generate our own set of samples from scratch
-    timg,tgt = generate(count)
-    tgtd = downsample(tgt)
-    xt,yt = timg,tgtd
-    print('generation done.')
+    # timg,tgt = generate(count)
+    # tgtd = downsample(tgt)
+    # xt,yt = timg,tgtd
+
+    global samplethread
+    if samplethread is None:
+        samplethread = th.Thread(target=sampleloop)
+        samplethread.start()
+    if not samplethread.is_alive():
+        samplethread = th.Thread(target=sampleloop)
+        samplethread.start()
+
+    xt,yt = [],[]
+    while True:
+        if len(xt)==count:
+            break
+        if len(sampleque)>0:
+            x,y = sampleque.pop()
+            xt.append(x)
+            yt.append(y)
+        else:
+            time.sleep(.1)
+
+    xt = np.stack(xt,axis=0)
+    yt = np.stack(yt,axis=0)
+    # print('generation done.')
     return xt,yt
+# end async mechanism.
 
 def r(ep=10,lr=1e-3):
     for i in range(ep):

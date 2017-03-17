@@ -252,9 +252,12 @@ def generate(num_track=500):
     timg8,tgt8 = np.zeros((num_track,num_per_track,128,128,3),dtype='uint8'),\
         np.zeros((num_track,num_per_track,128,128,1),dtype='uint8')
 
-    print('total:',num_track,'per track:',num_per_track)
+    if running_main:
+        print('total:',num_track,'per track:',num_per_track)
+        
     for i in range(num_track):
-        print('track #',i)
+        if num_track>2:
+            print('track #',i)
 
         # generate
         bimg,bgt = compose_one_batch(num_per_track,
@@ -267,8 +270,10 @@ def generate(num_track=500):
         tgt8[i] = (np.clip(bgt,a_min=0.,a_max=1.)*255.).astype('uint8')
 
     timg,tgt = timg8,tgt8
-    print('generated.')
-    print(timg.shape,timg.dtype,tgt.shape,tgt.dtype)
+
+    if running_main:
+        print('generated.')
+        print(timg.shape,timg.dtype,tgt.shape,tgt.dtype)
 
     if not running_main:
         return timg,tgt

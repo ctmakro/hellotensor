@@ -3,10 +3,6 @@ from __future__ import print_function
 import tensorflow as tf
 import canton as ct
 from canton import *
-from keras.datasets import cifar10
-
-# from keras.optimizers import *
-from keras.utils import np_utils
 
 import math
 
@@ -21,6 +17,10 @@ eps=1e-11
 zed = 100
 
 def cifar():
+    from keras.datasets import cifar10
+    # from keras.optimizers import *
+    from keras.utils import np_utils
+
     # input image dimensions
     img_rows, img_cols = 32, 32
     # the CIFAR10 images are RGB
@@ -64,13 +64,13 @@ def gen_gen():
     ngf = 32
     c.add(deconv(zed,ngf*8,upscale=4)) #4
     c.add(deconv(ngf*8,ngf*4))
-    
+
     #c.add(deconv(ngf*4,ngf*4,upscale=1))
-    
+
     c.add(deconv(ngf*4,ngf*2))
-    
+
     #c.add(deconv(ngf*2,ngf*2,upscale=1))
-    
+
     c.add(deconv(ngf*2,ngf*1)) #32
     c.add(deconv(ngf*1,3,tail=False,upscale=1))
     c.add(Act('tanh'))
@@ -90,7 +90,7 @@ def dis_gen():
 
         out = tf.concat([x,avgl1], axis=-1) # shape [N H W C+1]
         return out
-        
+
     def batch_disc(i):
         #assume i shape [N H W C]
         s = tf.shape(i)
@@ -104,9 +104,9 @@ def dis_gen():
         # shape [N H W 1]
         out = tf.concat([i, feat],axis=-1) # [N H W C+1]
         return out
-        
+
         #http://blog.aylien.com/introduction-generative-adversarial-networks-code-tensorflow/
-    
+
     cd = Can()
     cd.set_function(batch_disc)
 
@@ -147,28 +147,28 @@ def gan(g,d):
     noise = tf.random_normal(mean=0.,stddev=1.,shape=[batch_size,1,1,zed])
     real_data = ct.ph([None,None,3])
     inl = tf.Variable(1e-11)
-    
+
     def noisy(i):
         return i + tf.random_normal(mean=0,stddev=inl,shape=tf.shape(i))
 
     generated = g(noise)
-    
+
     gscore = d(noisy(generated))
     rscore = d(noisy(real_data))
-    
+
     def log_eps(i):
         return tf.reduce_mean(tf.log(i+1e-8))
 
     # single side label smoothing: replace 1.0 with 0.9
     #dloss = - (log_eps(1-gscore) + .1 * log_eps(1-rscore)+ .9*log_eps(rscore))
     #gloss = - log_eps(gscore)
-    
+
     dloss = tf.reduce_mean((gscore-0)**2 + (rscore-1)**2)
     gloss = tf.reduce_mean((gscore-1)**2)
 
     Adam = tf.train.AdamOptimizer
     #Adam = tf.train.MomentumOptimizer
-    
+
     lr,b1 = tf.Variable(1.2e-4),.5 # otherwise won't converge.
     optimizer = Adam(lr,beta1=b1)
     #optimizer = Adam(lr)
@@ -200,7 +200,7 @@ if __name__=='__main__':
     print('loading cifar...')
     global xt,yt,xv,yv
     xt,yt,xv,yv = cifar()
-    
+
     print('generating GAN...')
     gan_feed = gan(gm,dm)
 

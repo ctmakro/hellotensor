@@ -94,6 +94,6 @@ app.get('/score/:id',(req,res)=>{
   res.json(score) //{p:1,n:0}
 })
 
-app.listen(3000,()=>{
-  console.log('listening on 3000');
+app.listen(8080,()=>{ // OpenShift requirement
+  console.log('listening on 8080');
 })

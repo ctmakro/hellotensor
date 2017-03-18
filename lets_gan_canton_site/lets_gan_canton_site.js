@@ -3,16 +3,28 @@ var app = express()
 var fs = require('fs')
 var path = require('path');
 var low = require('lowdb')
-const db = low('db.json')
+
+var r = (i)=>Math.random()*(i||1)
+
+// deal with openshift environment
+if(process.env.OPENSHIFT_DATA_DIR){
+  var img_dirname = process.env.OPENSHIFT_DATA_DIR
+  var db_path = process.env.OPENSHIFT_DATA_DIR + '/db.json'
+}else{
+  var img_dirname = __dirname
+  var db_path = 'db.json'
+}
+
+// file db
+const db = low(db_path)
 const state = db.getState()
 
 state.ids = state.ids||{}
 
-var r = (i)=>Math.random()*(i||1)
-
-var imaginations = path.resolve( __dirname + '/../generated')
+var imaginations = path.resolve(img_dirname + '/../generated')
 var indexhtml = path.resolve(__dirname + '/index.html')
 
+//express
 app.get('/', (req,res)=>{
   state.visited = state.visited||0 + 1
   db.write()

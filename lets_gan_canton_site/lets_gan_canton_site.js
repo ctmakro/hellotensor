@@ -31,6 +31,11 @@ app.get('/generated/:id',(req,res)=>{
 var keys = {}
 var filenames = []
 
+try{
+  fs.mkdirSync(imaginations)
+}catch(err){
+  console.error(err);
+}
 var refresh_filelist = ()=>{
   //query filesystem at some interval
   fs.readdir(imaginations,(err,files)=>{
@@ -48,6 +53,10 @@ setInterval(refresh_filelist,3000)
 app.get('/random',(req,res,next)=>{
   // list all imaginations
   state.asked = state.asked||0 + 1
+
+  if(filenames.length<1){
+    throw 'no enough file to serve'
+  }
 
   //files is list of filenames
   var index = Math.floor(r(filenames.length))

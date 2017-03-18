@@ -16,3 +16,6 @@ canton/
 
 *.npy
 *.zip
+generated/
+lets_gan_canton_site/node_modules/*
+lets_gan_canton_site/db.json

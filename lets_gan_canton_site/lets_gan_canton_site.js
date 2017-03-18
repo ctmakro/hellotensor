@@ -12,7 +12,7 @@ if(process.env.OPENSHIFT_DATA_DIR){
   var db_path = process.env.OPENSHIFT_DATA_DIR + '/db.json'
   console.log(data_dirname);
 }else{
-  var data_dirname = __dirname
+  var data_dirname = __dirname + '/../'
   var db_path = 'db.json'
 }
 
@@ -22,7 +22,7 @@ const state = db.getState()
 
 state.ids = state.ids||{}
 
-var imaginations = path.resolve(data_dirname + '/../generated')
+var imaginations = path.resolve(data_dirname + '/generated')
 var indexhtml = path.resolve(__dirname + '/index.html')
 
 //express

@@ -5,11 +5,12 @@
   "main": "lets_gan_canton_site.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start":"node lets_gan_canton_site.js"
+    "start": "node lets_gan_canton_site.js"
   },
   "author": "Qin Yongliang",
   "license": "ISC",
   "dependencies": {
-    "express": "^4.15.2"
+    "express": "^4.15.2",
+    "lowdb": "^0.16.0"
   }
 }

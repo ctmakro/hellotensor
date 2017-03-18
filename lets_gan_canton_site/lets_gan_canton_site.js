@@ -29,27 +29,37 @@ app.get('/generated/:id',(req,res)=>{
 })
 
 var keys = {}
+var filenames = []
+
+var refresh_filelist = ()=>{
+  //query filesystem at some interval
+  fs.readdir(imaginations,(err,files)=>{
+    if(err)console.error(err);
+    else{
+      filenames = files
+    }
+  })
+}
+
+refresh_filelist()
+
+setInterval(refresh_filelist,3000)
 
 app.get('/random',(req,res,next)=>{
   // list all imaginations
   state.asked = state.asked||0 + 1
 
-  fs.readdir(imaginations,(err,files)=>{
-    if(err)next(err);
-    else{
-      //files is list of filenames
-      var index = Math.floor(r(files.length))
-      var id = files[index].split('.')[0]
+  //files is list of filenames
+  var index = Math.floor(r(filenames.length))
+  var id = filenames[index].split('.')[0]
 
-      var key = Math.floor(Math.random()*256*16777216).toString()
-      keys[key] = 1
+  var key = Math.floor(Math.random()*256*16777216).toString()
+  keys[key] = 1
 
-      // return the id
-      res.json({
-        id,
-        key,
-      })
-    }
+  // return the id
+  res.json({
+    id,
+    key,
   })
 })
 

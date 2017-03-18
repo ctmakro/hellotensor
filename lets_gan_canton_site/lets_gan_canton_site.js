@@ -10,31 +10,34 @@ var r = (i)=>Math.random()*(i||1)
 if(process.env.OPENSHIFT_DATA_DIR){
   var data_dirname = process.env.OPENSHIFT_DATA_DIR
   var db_path = process.env.OPENSHIFT_DATA_DIR + '/db.json'
-  console.log(data_dirname);
 }else{
   var data_dirname = __dirname + '/../'
   var db_path = 'db.json'
 }
 
 // file db
-const db = low(db_path)
-const state = db.getState()
+var db = low(db_path)
+var state = db.getState()
 
 state.ids = state.ids||{}
 
 var imaginations = path.resolve(data_dirname + '/generated')
 var indexhtml = path.resolve(__dirname + '/index.html')
 
+console.log('data_dirname',data_dirname);
+console.log('db_path',db_path);
+console.log('imaginations',imaginations);
+
 //express
 app.get('/', (req,res)=>{
-  state.visited = state.visited||0 + 1
+  state.visited = (state.visited||0) + 1
   db.write()
   res.sendFile(indexhtml)
 })
 
 app.get('/generated/:id',(req,res)=>{
   var id = req.params.id
-  state.served = state.served||0 + 1
+  state.served = (state.served||0) + 1
 
   console.log(id);
   fullpath = imaginations +'/'+ id + '.jpg'
@@ -65,7 +68,7 @@ setInterval(refresh_filelist,3000)
 
 app.get('/random',(req,res,next)=>{
   // list all imaginations
-  state.asked = state.asked||0 + 1
+  state.asked = (state.asked||0) + 1
 
   if(filenames.length<1){
     throw 'no enough file to serve'
@@ -104,7 +107,7 @@ app.get('/score/:id/:score/:key',(req,res)=>{
     state.ids[id] = {p:sc,n:1-sc}
   }
 
-  state.scored = state.scored||0 + 1
+  state.scored = (state.scored||0) + 1
 
   db.write()
   res.json({message:'success'})

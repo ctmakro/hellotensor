@@ -117,7 +117,7 @@ class Waiter:
             t[i] = None
 
 import os
-def generate_and_save():
+def generate_and_save(count=10):
     directory = './generated/'
 
     # check if path exists
@@ -126,7 +126,7 @@ def generate_and_save():
 
     num_files = len(os.listdir(directory))
 
-    if num_files < 10:
+    if num_files < count:
         image, hc = imagine3()
         fname = directory + hc + '.jpg'
 
@@ -138,10 +138,10 @@ def generate_and_save():
     else:
         time.sleep(.5)
 
-def deadpool():
+def deadpool(count=10):
     # global wt
     # wt = Waiter(generate_and_save)
     # wt.start()
 
     while True:
-        generate_and_save()
+        generate_and_save(count)

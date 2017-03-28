@@ -8,9 +8,12 @@ import tensorflow as tf
 time_steps = 16
 
 def get_text_data():
-    from keras.utils.data_utils import get_file
-    path = get_file('nietzsche.txt', origin="https://s3.amazonaws.com/text-datasets/nietzsche.txt")
-    text = open(path).read()
+    # from keras.utils.data_utils import get_file
+    # path = get_file('nietzsche.txt', origin="https://s3.amazonaws.com/text-datasets/nietzsche.txt")
+    # text = open(path).read()
+    import codecs
+    with open('oanc_partial.txt','rb') as f:
+        text = f.read()
     length = len(text)
     print('got corpus length:', length)
     return text

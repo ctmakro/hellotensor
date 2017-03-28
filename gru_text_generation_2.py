@@ -51,7 +51,13 @@ def feed_gen():
     gt = input_text_float[:,1:] # [batch, 1:timesteps, 256]
     y,_ = model(xhead,starting_state=None) # [batch, 1:timesteps, 256]
 
+    def cross_entropy_loss_per_char(pred,gt): # last dim is one_hot
+        def log2(i):
+            return tf.log(i) * 1.442695
+        return - tf.reduce_sum(log2(pred+1e-14) * gt, axis=tf.rank(pred)-1)
+
     loss = ct.cross_entropy_loss(y,gt)
+    loss_per_char = cross_entropy_loss_per_char(y,gt)
 
     train_step = tf.train.AdamOptimizer(1e-3).minimize(
         loss,var_list=model.get_weights())
@@ -82,7 +88,13 @@ def feed_gen():
                 feed_dict={input_text:i,starting_state:st})
         return res
 
-    return feed, stateful_predict
+    def loss_statistics(i):
+        sess = ct.get_session()
+        res = sess.run([loss_per_char],
+            feed_dict={input_text:i})
+        return res
+
+    return feed, stateful_predict, loss_statistics
 
 # if you are using IPython:
 # run r(1000) to train the model
@@ -127,13 +139,31 @@ def show2(length=400):
     sys.stdout.flush()
     print('')
 
+# bullshit analyzer
+def bsa(text):
+    buf = np.fromstring(text,dtype='uint8').reshape(1,len(text))
+    # what is the entropy? start from 2nd byte
+    loss, = loss_stats(buf)
+
+    simplified = text[0]
+
+    print(text[0],'initial')
+    for i in range(1,len(text)):
+        print(text[i],loss[0,i-1])
+        if loss[0,i-1] < 1: # discard words that are less than 1-bit
+            simplified+='-'
+        else:
+            simplified+=text[i]
+
+    print('simplified:',simplified)
+
 text = get_text_data() # the string
 corpus = np.fromstring(text,dtype='uint8') # the bytes
 print('corpus loaded. corpus[0]:',corpus[0], 'text[0]:',text[0])
 
 model = model_builder()
 
-feed, predict = feed_gen()
+feed, predict, loss_stats = feed_gen()
 
 sess = ct.get_session()
 sess.run(tf.global_variables_initializer())

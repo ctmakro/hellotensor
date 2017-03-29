@@ -93,7 +93,7 @@ def show(): # evaluate result on validation set
     import cv2
 
     # generate our own set of samples from scratch
-    xt,yt = needsamples(1)
+    xt,yt = needsamples(20)
 
     index = np.random.choice(len(xt))
     mbx = xt[index:index+1]

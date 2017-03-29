@@ -118,7 +118,7 @@ class ForeBackPair:
         offsets = [output_size[0]//2-fgscaled.shape[0]//2+fg_offsets[0], \
                     output_size[1]//2-fgscaled.shape[1]//2+fg_offsets[1]]
         offsets = [int(k) for k in offsets]
-        bgcorp = filt.alpha_composite(bgcrop,fgscaled,offsets)
+        bgcorp = filt.alpha_composite(bgcrop,fgscaled,offsets,verbose=False)
 
         out = bgcrop
 
@@ -229,8 +229,10 @@ def compose_one_batch(bs,random=False,show=True):
             bimg,bgt = fbp.compose_batch([128,128], bs, show=show)
             break
         except NameError as e:
-            print(e)
-            print('failed (might due to exceeding bg image). retry...')
+            # don't print error here. 20170329
+            pass
+            # print(e)
+            # print('failed (might due to exceeding bg image). retry...')
         except:
             raise
     return bimg,bgt
@@ -238,9 +240,9 @@ def compose_one_batch(bs,random=False,show=True):
 def test():
     compose_one_batch(20)
 
-def generate(num_track=500):
+def generate(num_track=500,num_per_track=16):
     num_track = num_track # number of tracks
-    num_per_track = 16 # length of each track
+    # num_per_track = 16 # length of each track
 
     if __name__=='__main__':
         global timg,tgt
@@ -254,7 +256,7 @@ def generate(num_track=500):
 
     if running_main:
         print('total:',num_track,'per track:',num_per_track)
-        
+
     for i in range(num_track):
         if num_track>2:
             print('track #',i)

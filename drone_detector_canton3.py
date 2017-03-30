@@ -9,8 +9,6 @@ import cv2
 # this time trying to train a multi-stage classifier
 # don't exploit motion information(!)
 
-from drone_samples_queue import needsamples
-
 def classifier():
     c = Can() #[NHWC]
     c1 = c.add(Conv2D(3,16,k=5,std=2,padding='VALID'))
@@ -29,9 +27,6 @@ def classifier():
         return i
     c.set_function(call)
     return c
-
-clf = classifier()
-clf.summary()
 
 def trainer():
     x,gt = ct.ph([None,None,3]), ct.ph([None,None,1])
@@ -71,6 +66,7 @@ def trainer():
     return feed,predict
 
 def r(ep=10,lr=1e-3):
+    from drone_samples_queue import needsamples
     for i in range(ep):
         print('ep',i)
 
@@ -92,6 +88,7 @@ def r(ep=10,lr=1e-3):
         show()
 
 def show(): # evaluate result on validation set
+    from drone_samples_queue import needsamples
     from cv2tools import filt,vis
     import cv2
 
@@ -113,6 +110,9 @@ if __name__ == '__main__':
     # timg,tgt = load_dataset('drone_dataset_96x96')
     # tgtd = downsample(tgt)
     # tgtd = tgt
+
+    clf = classifier()
+    clf.summary()
 
     feed,predict = trainer()
     ct.get_session().run(ct.gvi()) # global init

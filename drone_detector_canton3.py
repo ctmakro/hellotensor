@@ -46,7 +46,7 @@ def trainer():
     xf += tf.random_normal(tf.shape(xf),stddev=0.05)
 
     y = clf(xf)
-    loss = ct.binary_cross_entropy_loss(y,gtf,l=1.) # bias against black
+    loss = ct.binary_cross_entropy_loss(y,gtf,l=2.) # bias against black
     lr = tf.Variable(1e-3)
 
     print('connecting optimizer...')

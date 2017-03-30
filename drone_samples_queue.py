@@ -15,7 +15,7 @@ def downsample(tgt):
     for i in range(len(tgt)):
         for j in range(len(tgt[0])):
             img = tgt[i,j].astype('float32')
-            img = np.minimum(cv2.blur(cv2.blur(img,(5,5)),(5,5)) * 10, 255.)
+            img = np.minimum(cv2.blur(cv2.blur(img,(3,3)),(3,3)) * 10, 255.)
             img = cv2.resize(img,dsize=(sdim,sdim),interpolation=cv2.INTER_LINEAR)
             tgtd[i,j,:,:,0] = img[offs:offs+adim,offs:offs+adim].astype('uint8')
     # print('downsampling complete.')

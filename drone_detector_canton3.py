@@ -15,13 +15,16 @@ def classifier():
     c = Can() #[NHWC]
     c1 = c.add(Conv2D(3,16,k=5,std=2,padding='VALID'))
     c2 = c.add(Conv2D(16,16,k=5,std=2,padding='VALID'))
-    c3 = c.add(Conv2D(16,1,k=5,std=2,padding='VALID'))
+    c3 = c.add(Conv2D(16,16,k=5,std=2,padding='VALID'))
+    c4 = c.add(Conv2D(16,1,k=1,std=1,padding='VALID'))
     def call(i):
         i = c1(i)
-        i = Act('lrelu')(i)
+        i = Act('relu')(i)
         i = c2(i)
-        i = Act('lrelu')(i)
+        i = Act('relu')(i)
         i = c3(i)
+        i = Act('relu')(i)
+        i = c4(i)
         i = Act('sigmoid')(i)
         return i
     c.set_function(call)
@@ -43,7 +46,7 @@ def trainer():
     xf += tf.random_normal(tf.shape(xf),stddev=0.05)
 
     y = clf(xf)
-    loss = ct.binary_cross_entropy_loss(y,gtf,l=0.1) # bias against black
+    loss = ct.binary_cross_entropy_loss(y,gtf,l=1.) # bias against black
     lr = tf.Variable(1e-3)
 
     print('connecting optimizer...')
@@ -74,7 +77,7 @@ def r(ep=10,lr=1e-3):
         # generate our own set of samples from scratch
         xt,yt = needsamples(200)
 
-        bs = 10
+        bs = 20
         for j in range(len(xt)//bs):
             mbx = xt[j*bs:(j+1)*bs]
             mby = yt[j*bs:(j+1)*bs]
@@ -93,14 +96,10 @@ def show(): # evaluate result on validation set
     import cv2
 
     # generate our own set of samples from scratch
-    xt,yt = needsamples(20)
+    mbx,mby = needsamples(10)
 
-    index = np.random.choice(len(xt))
-    mbx = xt[index:index+1]
-    mby = yt[index:index+1]
-
-    mbx.shape = mbx.shape[1:]
-    mby.shape = mby.shape[1:]
+    mbx.shape = (10,) +mbx.shape[2:]
+    mby.shape = (10,) +mby.shape[2:]
 
     res = predict(mbx)
 

@@ -79,7 +79,7 @@ class Glimpse2D(Can):
         self.means = m
 
         # stddev of receptive fields
-        stddevs = (np.ones((nr,1))*ps*0.2).astype('float32')
+        stddevs = (np.ones((nr,1))*ps*0.12*(1/(w-1))).astype('float32')
         s = tf.Variable(stddevs,name='stddevs')
         self.weights.append(s)
         self.stddevs = s
@@ -232,7 +232,7 @@ class GRU_Glimpse2D_onepass(Can):
 # glimpse2dtest()
 
 GRU_Glimpse2D = rnn_gen('GG2D', GRU_Glimpse2D_onepass)
-gg2d = GRU_Glimpse2D(num_h=64, num_receptors=8, channels=1, pixel_span=28)
+gg2d = GRU_Glimpse2D(num_h=64, num_receptors=16, channels=1, pixel_span=28)
 
 def classifier():
     c = Can()

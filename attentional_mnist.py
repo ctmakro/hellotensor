@@ -232,7 +232,7 @@ class GRU_Glimpse2D_onepass(Can):
 # glimpse2dtest()
 
 GRU_Glimpse2D = rnn_gen('GG2D', GRU_Glimpse2D_onepass)
-gg2d = GRU_Glimpse2D(num_h=64, num_receptors=16, channels=1, pixel_span=28)
+gg2d = GRU_Glimpse2D(num_h=64, num_receptors=9, channels=1, pixel_span=28)
 
 def classifier():
     c = Can()
@@ -267,7 +267,7 @@ def trainer():
     x = inp-0.5
     x = tf.expand_dims(x,axis=1) #[NHWC] -> [N1HWC]
     gt2 = tf.expand_dims(gt,axis=1) #[batch, dims] -> [batch, 1, dims]
-    timesteps = 9 # how many timesteps would you evaluate the RNN
+    timesteps = 8 # how many timesteps would you evaluate the RNN
 
     x = tf.tile(x,multiples=[1,timesteps,1,1,1])
     gt2 = tf.tile(gt2,multiples=[1,timesteps,1])
@@ -318,7 +318,7 @@ get_session().run(gvi())
 
 def r(ep=10):
     length = len(xt)
-    bs = 20
+    bs = 5
     for i in range(ep):
         print('ep:',i)
         for j in range(0,length,bs):

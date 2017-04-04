@@ -73,13 +73,13 @@ class Glimpse2D(Can):
                     break
 
         # positions = np.random.uniform(low=-ps/2,high=ps/2,size=(nr,2)).astype('float32')
-        positions = (positions - 0.5) * ps * 0.8
+        positions = (positions - 0.5) * ps * 0.5
         m = tf.Variable(positions,name='means')
         self.weights.append(m)
         self.means = m
 
         # stddev of receptive fields
-        stddevs = (np.ones((nr,1))*2).astype('float32')
+        stddevs = (np.ones((nr,1))*ps*0.2).astype('float32')
         s = tf.Variable(stddevs,name='stddevs')
         self.weights.append(s)
         self.stddevs = s
@@ -171,12 +171,11 @@ class GRU_Glimpse2D_onepass(Can):
         self.pixel_span = pixel_span # how far can the fovea go
 
         num_in = channels * num_receptors
-        num_gru_in = int(num_h / 2)
 
         self.glimpse2d = g2d = Glimpse2D(num_receptors, pixel_span)
-        self.gru_onepass = gop = ct.cans.GRU_onepass(num_gru_in,num_h)
+        self.gru_onepass = gop = ct.cans.GRU_onepass(num_in,num_h)
         self.hidden2offset = h2o = Dense(num_h,2)
-        self.glimpse2gru = g2g = Dense(num_in,num_gru_in)
+        # self.glimpse2gru = g2g = Dense(num_in,num_gru_in)
 
         self.incan([g2d,gop,h2o,g2g])
 
@@ -185,7 +184,7 @@ class GRU_Glimpse2D_onepass(Can):
         images = i[1] # input image [NHWC]
 
         g2d = self.glimpse2d
-        g2g = self.glimpse2gru
+        # g2g = self.glimpse2gru
         gop = self.gru_onepass
         h2o = self.hidden2offset
 
@@ -196,9 +195,9 @@ class GRU_Glimpse2D_onepass(Can):
         rsh = tf.shape(responses)
         responses = tf.reshape(responses,shape=(rsh[0],rsh[1]*rsh[2]))
 
-        responses2 = g2g(responses)
-        responses2 = Act('lrelu')(responses2)
-        hidden_new = gop([hidden,responses2])
+        # responses2 = g2g(responses)
+        # responses2 = Act('lrelu')(responses2)
+        hidden_new = gop([hidden,responses])
         return hidden_new
 
     def get_offset(self, hidden):
@@ -268,7 +267,7 @@ def trainer():
     x = inp-0.5
     x = tf.expand_dims(x,axis=1) #[NHWC] -> [N1HWC]
     gt2 = tf.expand_dims(gt,axis=1) #[batch, dims] -> [batch, 1, dims]
-    timesteps = 6 # how many timesteps would you evaluate the RNN
+    timesteps = 9 # how many timesteps would you evaluate the RNN
 
     x = tf.tile(x,multiples=[1,timesteps,1,1,1])
     gt2 = tf.tile(gt2,multiples=[1,timesteps,1])
@@ -343,7 +342,7 @@ def show():
 
     tiledx += 0.5
     tiledx_copy = tiledx.copy()
-    tiledx = (tiledx*255.).astype('uint8') # 8-bit-ify
+    tiledx = (tiledx*255.).astype('uint16') # 16-bit-ify
     tiledx = np.tile(tiledx,(1,1,1,3)) # colorify
 
     shifted_means += np.array([img.shape[1]-1,img.shape[2]-1],dtype='float32')/2
@@ -353,12 +352,13 @@ def show():
     for idxt,receptors in enumerate(shifted_means[0]):
         tmp = tiledx[0,idxt]*0 # [HWC]
         for idxr,receptor in enumerate(receptors):
-            tmp += cv2.circle(tmp*0, (int(receptor[1]*16), int(receptor[0]*16)),
-                radius=int(variances[idxr,0]*16),
-                color=(100,100,100), thickness=-1,
+            tmp += cv2.circle(np.zeros_like(tmp,dtype='uint8'), (int(receptor[1]*16), int(receptor[0]*16)),
+                radius=int(np.sqrt(variances[idxr,0])*16),
+                color=(80,140,180), thickness=-1,
                 lineType=cv2.LINE_AA, shift=4)
 
         tiledx[0,idxt] = tiledx[0,idxt]*0.5 + tmp*0.5
 
+    tiledx = tiledx.clip(min=0,max=255).astype('uint8')
     vis.show_batch_autoscaled(tiledx_copy[0],name='input sequence')
     vis.show_batch_autoscaled(tiledx[0],name='attention over time')

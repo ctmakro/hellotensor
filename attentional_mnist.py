@@ -177,7 +177,7 @@ class GRU_Glimpse2D_onepass(Can):
         self.hidden2offset = h2o = Dense(num_h,2)
         # self.glimpse2gru = g2g = Dense(num_in,num_gru_in)
 
-        self.incan([g2d,gop,h2o,g2g])
+        self.incan([g2d,gop,h2o])
 
     def __call__(self,i):
         hidden = i[0] # hidden state of gru [batch, dims]

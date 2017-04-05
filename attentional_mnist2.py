@@ -76,14 +76,13 @@ def cifar():
 
 xt,yt,xv,yv = cifar()
 
-gg2d = GRU_Glimpse2D(
-    num_h=64, num_receptors=9,
-    channels=xt.shape[3], pixel_span=xt.shape[1])
-
 def classifier():
     c = Can()
-    g = c.add(gg2d)
-    d1 = c.add(TimeDistributedDense(64,10))
+    g = c.add(
+        GRU_Glimpse2D(
+            num_h=96, num_receptors=49,
+            channels=xt.shape[3], pixel_span=xt.shape[1]))
+    d1 = c.add(TimeDistributedDense(96,10))
     c.unit = g.unit # rnn onepass instance
     def call(i,return_hidden_states=False):
         # input should be image sequence: [NTHWC]

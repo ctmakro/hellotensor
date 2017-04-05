@@ -165,6 +165,7 @@ feed,test = trainer()
 get_session().run(gvi())
 
 def r(ep=10):
+    import time
     length = len(xt)
     bs = 20
     for i in range(ep):
@@ -172,8 +173,9 @@ def r(ep=10):
         for j in range(0,length,bs):
             mbx = xt[j:j+bs]
             mby = yt[j:j+bs]
+            tick = time.time()
             loss,acc = feed(mbx,mby)
-            print(j,'loss:',loss,'acc:',acc)
+            print(j,'loss:',loss,'acc:',acc,'time(ms):',(time.time()-tick)*1000)
             if j% 200 == 0:
                 show()
 

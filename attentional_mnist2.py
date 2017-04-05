@@ -78,7 +78,7 @@ xt,yt,xv,yv = cifar()
 
 gg2d = GRU_Glimpse2D(
     num_h=64, num_receptors=9,
-    channels=xt.shape[3], pixel_span=32)
+    channels=xt.shape[3], pixel_span=xt.shape[1])
 
 def classifier():
     c = Can()
@@ -191,8 +191,8 @@ def show():
     tiledx += 0.5
     tiledx_copy = tiledx.copy()
     tiledx = (tiledx*255.).astype('uint16') # 16-bit-ify
-    if tiledx.shape[3]==1:
-        tiledx = np.tile(tiledx,(1,1,1,3)) # colorify
+    if tiledx.shape[-1]==1:
+        tiledx = np.tile(tiledx,(1,1,1,1,3)) # colorify
 
     shifted_means += np.array([img.shape[1]-1,img.shape[2]-1],dtype='float32')/2
     # shift from image center to image coordinates

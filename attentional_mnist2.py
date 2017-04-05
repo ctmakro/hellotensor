@@ -44,9 +44,41 @@ def mnist_data():
     print('mnist loaded.')
     return X_train,Y_train,X_test,Y_test
 
-xt,yt,xv,yv = mnist_data()
+def cifar():
+    from keras.datasets import cifar10
+    # from keras.optimizers import *
+    from keras.utils import np_utils
 
-gg2d = GRU_Glimpse2D(num_h=64, num_receptors=9, channels=1, pixel_span=28)
+    # input image dimensions
+    img_rows, img_cols = 32, 32
+    # the CIFAR10 images are RGB
+    img_channels = 3
+    nb_classes = 10
+
+    # the data, shuffled and split between train and test sets
+    (X_train, y_train), (X_test, y_test) = cifar10.load_data()
+
+    print('X_train shape:', X_train.shape)
+    print(X_train.shape[0], 'train samples')
+    print(X_test.shape[0], 'test samples')
+
+    # convert class vectors to binary class matrices
+    Y_train = np_utils.to_categorical(y_train, nb_classes)
+    Y_test = np_utils.to_categorical(y_test, nb_classes)
+
+    X_train = X_train.astype('float32')
+    X_test = X_test.astype('float32')
+
+    X_train /= 255
+    X_test /= 255
+
+    return X_train,Y_train,X_test,Y_test
+
+xt,yt,xv,yv = cifar()
+
+gg2d = GRU_Glimpse2D(
+    num_h=64, num_receptors=9,
+    channels=xt.shape[3], pixel_span=32)
 
 def classifier():
     c = Can()
@@ -75,7 +107,7 @@ gg2dclf = classifier()
 gg2dclf.summary()
 
 def trainer():
-    inp = ct.ph([None,None,1]) # image
+    inp = ct.ph([None,None,None]) # image
     gt = ct.ph([10]) # labels
 
     x = inp-0.5
@@ -159,7 +191,8 @@ def show():
     tiledx += 0.5
     tiledx_copy = tiledx.copy()
     tiledx = (tiledx*255.).astype('uint16') # 16-bit-ify
-    tiledx = np.tile(tiledx,(1,1,1,3)) # colorify
+    if tiledx.shape[3]==1:
+        tiledx = np.tile(tiledx,(1,1,1,3)) # colorify
 
     shifted_means += np.array([img.shape[1]-1,img.shape[2]-1],dtype='float32')/2
     # shift from image center to image coordinates
@@ -168,6 +201,7 @@ def show():
     for idxt,receptors in enumerate(shifted_means[0]):
         tmp = tiledx[0,idxt]*0 # [HWC]
         for idxr,receptor in enumerate(receptors):
+            # additively paint circles
             tmp += cv2.circle(
                 np.zeros_like(tmp,dtype='uint8'),
                 (int(receptor[1]*16), int(receptor[0]*16)),
@@ -175,7 +209,7 @@ def show():
                 color=(80,140,180), thickness=-1,
                 lineType=cv2.LINE_AA, shift=4)
 
-        tiledx[0,idxt] = tiledx[0,idxt]*0.5 + tmp*0.5
+        tiledx[0,idxt] = tiledx[0,idxt]*0.5 + tmp*0.5 # blend with original
 
     tiledx = tiledx.clip(min=0,max=255).astype('uint8')
     vis.show_batch_autoscaled(tiledx_copy[0],name='input sequence')

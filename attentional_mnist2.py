@@ -91,15 +91,17 @@ def trainer():
     loss = mean_softmax_cross_entropy(y, gt2)
     # mean of cross entropy, over all timesteps.
 
+    accuracy = one_hot_accuracy(y[:,-1,:],gt)
+
     opt = tf.train.AdamOptimizer()
     train_step = opt.minimize(loss, var_list=gg2dclf.get_weights())
 
     def feed(img,lbl):
         sess = get_session()
-        res = sess.run([train_step,loss],feed_dict={
+        res = sess.run([train_step,loss,accuracy],feed_dict={
             inp:img, gt:lbl
         })
-        return res[1]
+        return res[1:3]
 
     # extract foveal pattern from hidden states
     set_training_state(False) # set training state to false to enable softmax
@@ -138,8 +140,8 @@ def r(ep=10):
         for j in range(0,length,bs):
             mbx = xt[j:j+bs]
             mby = yt[j:j+bs]
-            loss = feed(mbx,mby)
-            print(j,'loss:',loss)
+            loss,acc = feed(mbx,mby)
+            print(j,'loss:',loss,'acc:',acc)
             if j% 200 == 0:
                 show()
 

@@ -172,6 +172,8 @@ def r(ep=10):
         for j in range(0,length,bs):
             mbx = xt[j:j+bs]
             mby = yt[j:j+bs]
+            if np.random.uniform()>0.5:
+                mbx = np.flip(mbx,2) # horizontal flip
             tick = time.time()
             loss,acc = feed(mbx,mby)
             print(j,'loss:',loss,'acc:',acc,'time(ms):',(time.time()-tick)*1000)

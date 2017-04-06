@@ -171,5 +171,6 @@ class app:
         cv2.imshow('fg',fg)
         return thisframe
 
-inst = app()
-inst.loop()
+if __name__ == '__main__':
+    inst = app()
+    inst.loop()

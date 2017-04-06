@@ -14,8 +14,8 @@ from drone_samples_queue import needsamples
 def classifier():
     c = Can() #[NHWC]
     c1 = c.add(Conv2D(3,16,k=5,std=2,padding='VALID'))
-    c2 = c.add(Conv2D(16,16,k=5,std=2,padding='VALID'))
-    c3 = c.add(Conv2D(16,16,k=5,std=2,padding='VALID'))
+    c2 = c.add(Conv2D(16,32,k=5,std=2,padding='VALID'))
+    c3 = c.add(Conv2D(32,16,k=5,std=2,padding='VALID'))
     c4 = c.add(Conv2D(16,1,k=1,std=1,padding='VALID'))
     def call(i):
         i = c1(i)

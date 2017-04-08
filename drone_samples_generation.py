@@ -57,7 +57,8 @@ class ForeBackPair:
         fg_gamma=1,
         bg_gamma=1,
         fg_beta=0.,
-        bg_beta=0.):
+        bg_beta=0.,
+        has_fg=True):
 
         def limit(lower,upper): # generate a limiter
             return lambda x:int(np.clip(x,a_min=lower,a_max=upper))
@@ -72,8 +73,8 @@ class ForeBackPair:
 
         # obtain intersection of intended crop area and valid area
         isect = filt.intersect([0,0],[int(bgox-ow/2), int(bgoy-oh/2)],[bgh,bgw],[int(oh),int(ow)])
-        if isect==False:
-            raise NameError('maybe too close to border.')
+        if isect is None:
+            raise ValueError('(compose_one) maybe too close to border.')
 
         tl,br,sz = isect
         # print('isect',isect)
@@ -91,65 +92,72 @@ class ForeBackPair:
         # 3a. brightness
         bgcrop = bgcrop * bg_gamma + bg_beta
 
-        # 4. motion blur the foreground, before rotation and scale
-        rad = np.arctan2(-fg_blur[0],fg_blur[1])
-        l1 = max(abs(fg_blur[0]),abs(fg_blur[1])) * (1./self.fg_scale)
-        l1 = int(l1)
-        fgblurred = filt.apply_motion_blur(self.fg,
-            dim=l1,
-            angle=(rad/math.pi*180)-self.fg_angle)
+        if has_fg==True:
 
-        # 5. rotate and scale the foreground
-        fgscaled = filt.rotate_scale(fgblurred,
-            self.fg_angle,
-            self.fg_scale)
-        # print(self.fg.shape,'fg scaled. shape:',fgscaled.shape)
-        # vis.show_autoscaled(fgscaled)
+            # 4. motion blur the foreground, before rotation and scale
+            rad = np.arctan2(-fg_blur[0],fg_blur[1])
+            l1 = max(abs(fg_blur[0]),abs(fg_blur[1])) * (1./self.fg_scale)
+            l1 = int(l1)
+            fgblurred = filt.apply_motion_blur(self.fg,
+                dim=l1,
+                angle=(rad/math.pi*180)-self.fg_angle)
 
-        # 5a. brightness
-        fgscaled[:,:,0:3]*=fg_gamma
-        fgscaled[:,:,0:3]+=fg_beta
+            # 5. rotate and scale the foreground
+            fgscaled = filt.rotate_scale(fgblurred,
+                self.fg_angle,
+                self.fg_scale)
+            # print(self.fg.shape,'fg scaled. shape:',fgscaled.shape)
+            # vis.show_autoscaled(fgscaled)
 
-        # 6. blur the alpha a little bit
-        fgscaled = cv2.blur(fgscaled,(2,2))
-        # fgscaled[:,:,3] = cv2.blur(fgscaled[:,:,3:4],(2,2))
+            # 5a. brightness
+            fgscaled[:,:,0:3]*=fg_gamma
+            fgscaled[:,:,0:3]+=fg_beta
 
-        # 7. alpha overlay with offsets
-        offsets = [output_size[0]//2-fgscaled.shape[0]//2+fg_offsets[0], \
-                    output_size[1]//2-fgscaled.shape[1]//2+fg_offsets[1]]
-        offsets = [int(k) for k in offsets]
-        bgcorp = filt.alpha_composite(bgcrop,fgscaled,offsets,verbose=False)
+            # 6. blur the alpha a little bit
+            fgscaled = cv2.blur(fgscaled,(2,2))
+            # fgscaled[:,:,3] = cv2.blur(fgscaled[:,:,3:4],(2,2))
+
+            # 7. alpha overlay with offsets
+            offsets = [output_size[0]//2-fgscaled.shape[0]//2+fg_offsets[0], \
+                        output_size[1]//2-fgscaled.shape[1]//2+fg_offsets[1]]
+            offsets = [int(k) for k in offsets]
+            bgcorp = filt.alpha_composite(bgcrop,fgscaled,offsets,verbose=False)
 
         out = bgcrop
 
         # 8. ground truth label
-        s0,s1 = fgscaled.shape[0],fgscaled.shape[1]
 
-        if True: # below code if semantic segmentation (alpha of the drone)
-            offsets = [output_size[0]/2-s0/2+fg_offsets[0], \
-                        output_size[1]/2-s1/2+fg_offsets[1]]
-            offsets = [int(k) for k in offsets]
+        if False: # below code if semantic segmentation (alpha of the drone)
             gt = np.zeros(output_size+[1],dtype='float32')
-            isectgr = filt.intersect_get_roi(gt,fgscaled[:,:,3:4],offsets)
-            if isectgr is None:
-                pass
-            else:
-                fgroi,bgroi = isectgr
-                bgroi[:] = fgroi[:]
-                #bgroi[:] = 1.
+
+            if has_fg==True:
+                s0,s1 = fgscaled.shape[0],fgscaled.shape[1]
+                offsets = [output_size[0]/2-s0/2+fg_offsets[0], \
+                            output_size[1]/2-s1/2+fg_offsets[1]]
+                offsets = [int(k) for k in offsets]
+
+                isectgr = filt.intersect_get_roi(gt,fgscaled[:,:,3:4],offsets)
+                if isectgr is None:
+                    pass
+                else:
+                    fgroi,bgroi = isectgr
+                    bgroi[:] = fgroi[:]
+                    #bgroi[:] = 1.
 
         else: # below code produces a dot
-            offsets = [output_size[0]/2+fg_offsets[0], \
-                output_size[1]/2+fg_offsets[1]]
-            offsets = [int(k) for k in offsets]
             gt = np.zeros(output_size+[1],dtype='float32')
-            if offsets[0]>0 and offsets[0]<output_size[0]-1:
-                if offsets[1]>0 and offsets[1]<output_size[1]-1:
-                    gt[offsets[0],offsets[1]] = 1.
-                    gt = cv2.blur(gt,(3,3))
-                    gt = cv2.blur(gt,(3,3))
-                    gt = np.minimum(gt*20,1.)
-                    gt.shape = gt.shape+(1,)
+
+            if has_fg==True:
+                offsets = [output_size[0]/2+fg_offsets[0], \
+                    output_size[1]/2+fg_offsets[1]]
+                offsets = [int(k) for k in offsets]
+                if offsets[0]>0 and offsets[0]<output_size[0]-1:
+                    if offsets[1]>0 and offsets[1]<output_size[1]-1:
+                        gt[offsets[0],offsets[1]] = 1.
+                        gt = cv2.blur(gt,(5,5))
+                        gt = cv2.blur(gt,(5,5))
+                        gt = np.minimum(gt*20,1.)
+                        gt.shape = gt.shape+(1,)
 
         return out,gt
 
@@ -169,6 +177,8 @@ class ForeBackPair:
         bg_gamma = rn(1)+.4
         bg_beta = .25 - rn(.5)
 
+        has_fg = rn(1)>0.5
+
         for i in range(len(bgrw)):
             if True: # test flag
                 img,gt = self.compose_one(output_size,
@@ -178,7 +188,8 @@ class ForeBackPair:
                     fg_gamma=fg_gamma,
                     bg_gamma=bg_gamma,
                     fg_beta=fg_beta,
-                    bg_beta=bg_beta)
+                    bg_beta=bg_beta,
+                    has_fg=has_fg)
             else:
                 img,gt = self.compose_one(output_size,fgrw[i]*0,bgrw[i]*0,
                     fg_blur=fgs[i]/2*0,bg_blur=bgs[i]/2*0)
@@ -223,15 +234,14 @@ def compose_one_batch(bs,random=False,show=True):
                 drone_id,bg_id = 0,0
 
             fbp = ForeBackPair(drone_images[drone_id],bg_images[bg_id])
-            fbp.fg_scale = rn(1)**2*0.4 + 0.2
+            fbp.fg_scale = rn(1)*0.5 + 0.2
             fbp.bg_scale = 0.9 + rn(3)
             fbp.fg_angle = rn(180)-90
             bimg,bgt = fbp.compose_batch([128,128], bs, show=show)
             break
-        except NameError as e:
+        except ValueError as e:
             # don't print error here. 20170329
             pass
-            # print(e)
             # print('failed (might due to exceeding bg image). retry...')
         except:
             raise

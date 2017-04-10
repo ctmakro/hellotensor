@@ -13,8 +13,8 @@ def classifier():
     c = Can() #[NHWC]
     c1 = c.add(Conv2D(3,16,k=5,std=2,padding='VALID'))
     c2 = c.add(Conv2D(16,32,k=5,std=2,padding='VALID'))
-    c3 = c.add(Conv2D(32,16,k=5,std=2,padding='VALID'))
-    c4 = c.add(Conv2D(16,1,k=1,std=1,padding='VALID'))
+    c3 = c.add(Conv2D(32,64,k=5,std=2,padding='VALID'))
+    c4 = c.add(Conv2D(64,1,k=5,std=1,padding='VALID'))
     def call(i):
         i = c1(i)
         i = Act('relu')(i)
@@ -23,7 +23,8 @@ def classifier():
         i = c3(i)
         i = Act('relu')(i)
         i = c4(i)
-        i = Act('sigmoid')(i)
+        if get_training_state()==False:
+            i = Act('sigmoid')(i)
         return i
     c.set_function(call)
     return c
@@ -41,7 +42,7 @@ def trainer():
     xf += tf.random_normal(tf.shape(xf),stddev=0.05)
 
     y = clf(xf)
-    loss = ct.binary_cross_entropy_loss(y,gtf,l=2.) # bias against black
+    loss = ct.mean_sigmoid_cross_entropy_loss(y,gtf)
     lr = tf.Variable(1e-3)
 
     print('connecting optimizer...')

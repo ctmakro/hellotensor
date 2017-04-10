@@ -9,7 +9,7 @@ def downsample(tgt):
     # print('downsampling gt...')
     s = tgt.shape
     sdim = 32
-    adim = 13
+    adim = 9
     offs = int((sdim-adim) / 2)
     tgtd = np.zeros((s[0],s[1],adim,adim,s[4]),dtype='uint8')
     for i in range(len(tgt)):

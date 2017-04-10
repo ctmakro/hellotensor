@@ -166,8 +166,8 @@ class ForeBackPair:
                 if offsets[0]>0 and offsets[0]<output_size[0]-1:
                     if offsets[1]>0 and offsets[1]<output_size[1]-1:
                         gt[offsets[0],offsets[1]] = 1.
-                        gt = cv2.blur(gt,(5,5))
-                        gt = cv2.blur(gt,(5,5))
+                        gt = cv2.blur(gt,(7,7))
+                        gt = cv2.blur(gt,(7,7))
                         gt = np.minimum(gt*20,1.)
                         gt.shape = gt.shape+(1,)
 

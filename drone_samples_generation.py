@@ -3,6 +3,7 @@ import os
 import cv2
 import numpy as np
 import math
+import random
 
 def rn(i):
     return np.random.uniform() * i
@@ -62,6 +63,11 @@ class ForeBackPair:
 
         def limit(lower,upper): # generate a limiter
             return lambda x:int(np.clip(x,a_min=lower,a_max=upper))
+
+        def randomlyswapchannels(i):
+            i = np.transpose(i,(2,1,0))
+            np.random.shuffle(i[0:3])
+            return np.transpose(i,(2,1,0))
         # 1. crop a piece from background
         oh,ow = output_size
         oh,ow = oh*self.bg_scale, ow*self.bg_scale
@@ -92,6 +98,9 @@ class ForeBackPair:
         # 3a. brightness
         bgcrop = bgcrop * bg_gamma + bg_beta
 
+        # 3b. swap channel randomly
+        bgcrop = randomlyswapchannels(bgcrop)
+
         if has_fg==True:
 
             # 4. motion blur the foreground, before rotation and scale
@@ -112,6 +121,9 @@ class ForeBackPair:
             # 5a. brightness
             fgscaled[:,:,0:3]*=fg_gamma
             fgscaled[:,:,0:3]+=fg_beta
+
+            # 5b. randomly swap channels
+            fgscaled = randomlyswapchannels(fgscaled)
 
             # 6. blur the alpha a little bit
             fgscaled = cv2.blur(fgscaled,(2,2))
